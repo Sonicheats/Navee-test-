@@ -93,6 +93,7 @@ const NaveeBLE = (() => {
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
         const result = await ble.requestDevice({
+            acceptAllDevices: true,
             optionalServices: [ST3_UART_SERVICE_UUID]
         });
         
