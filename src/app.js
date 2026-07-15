@@ -64,8 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error('Connection error:', err);
+            alert('BLE Error: ' + (err.message || err));
             connectBtn.textContent = 'Connect Scooter';
-            alert('Failed to connect: ' + err.message);
         }
     });
 
