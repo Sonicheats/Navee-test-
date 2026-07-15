@@ -34,7 +34,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       
@@ -47,14 +47,16 @@ jobs:
         run: npm install
         
       - name: Add iOS Platform
-        run: npx cap add ios
+        run: |
+          npx cap add ios
+          npx cap sync ios
         
       - name: Build Unsigned iOS IPA
         run: |
           cd ios/App
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphoneos build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          xcodebuild clean build -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" SYMROOT=$(PWD)/build || true
           mkdir -p Payload
-          cp -r build/Debug-iphoneos/App.app Payload/
+          cp -r build/Release-iphoneos/App.app Payload/
           zip -r ST3_Tuner.ipa Payload
           
       - name: Upload IPA
