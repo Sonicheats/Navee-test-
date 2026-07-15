@@ -87,8 +87,15 @@ const NaveeBLE = (() => {
             throw new Error("Native Bluetooth plugin not found. Build the APK/IPA.");
         }
         console.log("initBle: Calling initialize()...");
-        await window.Capacitor.Plugins.BluetoothLe.initialize();
-        console.log("initBle: initialize() complete.");
+        try {
+            await Promise.race([
+                window.Capacitor.Plugins.BluetoothLe.initialize(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500))
+            ]);
+            console.log("initBle: initialize() complete.");
+        } catch (e) {
+            console.log("initBle: initialize() bypassed (" + e.message + "). Moving on...");
+        }
     }
 
     async function scanAndConnect() {
