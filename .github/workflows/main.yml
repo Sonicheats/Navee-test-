@@ -34,7 +34,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
   build-ios:
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       
