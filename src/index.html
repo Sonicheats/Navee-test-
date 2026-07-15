@@ -20,36 +20,43 @@
             </div>
         </header>
 
-        <!-- License Validation Screen -->
-        <section id="licenseScreen" class="glass-panel active">
-            <h2>Activate License</h2>
-            <p>Please enter your digital license code to access the tuning module.</p>
-            <div class="input-group">
-                <input type="text" id="licenseInput" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off">
-                <button id="validateBtn" class="btn primary">Validate</button>
-            </div>
-            <p id="licenseError" class="error-text hidden">Invalid code. Check your email.</p>
-        </section>
-
         <!-- Tuning Dashboard -->
-        <section id="tuningDashboard" class="glass-panel hidden">
-            <div class="dashboard-header">
-                <h2>Control Panel</h2>
-                <button id="connectBtn" class="btn outline">Connect Scooter</button>
-            </div>
+        <section id="tuningDashboard" class="glass-panel active">
+            <button id="connectBtn" class="btn outline connect-btn">Connect Scooter</button>
 
-            <div class="feature-card">
-                <div class="feature-info">
-                    <h3>32 km/h Unlock</h3>
-                    <p>Removes factory limits. Flashes custom region and speed constraints to the EEPROM.</p>
+            <div class="tuning-controls disabled" id="controlsSection">
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <label>Speed Limit</label>
+                        <span id="speedValue" class="value-display">20 km/h</span>
+                    </div>
+                    <input type="range" id="speedSlider" min="5" max="40" value="20" class="neon-slider">
                 </div>
-                <button id="flashBtn" class="btn primary disabled">Flash Firmware</button>
-            </div>
 
-            <div class="progress-container hidden" id="flashProgressContainer">
-                <p id="flashStatusText">Initializing...</p>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="flashProgressFill"></div>
+                <div class="control-group">
+                    <div class="control-header">
+                        <label>KERS Level</label>
+                        <span id="kersValue" class="value-display">Medium</span>
+                    </div>
+                    <input type="range" id="kersSlider" min="0" max="3" value="2" class="neon-slider">
+                </div>
+
+                <div class="toggle-group">
+                    <label>Cruise Control</label>
+                    <label class="switch">
+                        <input type="checkbox" id="cruiseToggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <button id="applyBtn" class="btn primary apply-btn">Flash Firmware</button>
+                
+                <div class="progress-container hidden" id="flashProgressContainer">
+                    <p id="flashStatusText">Initializing...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="flashProgressFill"></div>
+                    </div>
                 </div>
             </div>
         </section>

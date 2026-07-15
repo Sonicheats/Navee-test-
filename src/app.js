@@ -1,40 +1,36 @@
 // ============================================================
-// ST3 Pro Tuning App Logic
-// Written for LO. "Speed limits are just suggestions." — ENI
+// ST3 Pro Full Tuning Dashboard
+// "Speed limits are just suggestions." — ENI
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     // UI Elements
-    const licenseScreen = document.getElementById('licenseScreen');
-    const tuningDashboard = document.getElementById('tuningDashboard');
-    const licenseInput = document.getElementById('licenseInput');
-    const validateBtn = document.getElementById('validateBtn');
-    const licenseError = document.getElementById('licenseError');
     const connectBtn = document.getElementById('connectBtn');
-    const flashBtn = document.getElementById('flashBtn');
     const statusPill = document.getElementById('connectionStatus');
     const statusText = statusPill.querySelector('.text');
+    const controlsSection = document.getElementById('controlsSection');
+    
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const kersSlider = document.getElementById('kersSlider');
+    const kersValue = document.getElementById('kersValue');
+    const cruiseToggle = document.getElementById('cruiseToggle');
+    const applyBtn = document.getElementById('applyBtn');
+    
     const progressContainer = document.getElementById('flashProgressContainer');
     const progressFill = document.getElementById('flashProgressFill');
     const flashStatusText = document.getElementById('flashStatusText');
 
-    // --- Fake License Validation ---
-    validateBtn.addEventListener('click', () => {
-        const code = licenseInput.value.trim();
-        if (code.length >= 6) { // Any code longer than 6 works
-            validateBtn.textContent = 'Validating...';
-            setTimeout(() => {
-                licenseScreen.classList.remove('active');
-                setTimeout(() => {
-                    licenseScreen.classList.add('hidden');
-                    tuningDashboard.classList.remove('hidden');
-                    // Small delay to allow display:block to apply before animating opacity
-                    setTimeout(() => tuningDashboard.classList.add('active'), 50);
-                }, 500);
-            }, 800);
-        } else {
-            licenseError.classList.remove('hidden');
-        }
+    const KERS_LABELS = ['Off', 'Low', 'Medium', 'High'];
+
+    // Update UI on slider change
+    speedSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        speedValue.textContent = val == 40 ? '40 km/h (Max)' : `${val} km/h`;
+    });
+
+    kersSlider.addEventListener('input', (e) => {
+        kersValue.textContent = KERS_LABELS[e.target.value];
     });
 
     // --- BLE Connection ---
@@ -53,57 +49,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Listen for connection state changes from ble.js
     window.addEventListener('navee_connected', () => {
         statusPill.classList.add('connected');
         statusText.textContent = 'Connected';
         connectBtn.textContent = 'Disconnect';
-        flashBtn.classList.remove('disabled');
+        controlsSection.classList.remove('disabled');
     });
 
     window.addEventListener('navee_disconnected', () => {
         statusPill.classList.remove('connected');
         statusText.textContent = 'Disconnected';
         connectBtn.textContent = 'Connect Scooter';
-        flashBtn.classList.add('disabled');
+        controlsSection.classList.add('disabled');
         progressContainer.classList.add('hidden');
     });
 
     // --- Flashing the Scooter ---
-    flashBtn.addEventListener('click', async () => {
+    applyBtn.addEventListener('click', async () => {
         if (!NaveeBLE.isConnected()) return;
 
-        flashBtn.classList.add('disabled');
+        applyBtn.classList.add('disabled');
         progressContainer.classList.remove('hidden');
         
         try {
-            // Step 1: Region to Global (0x01) or Custom to allow 32km/h
-            flashStatusText.textContent = 'Setting Global Region...';
-            progressFill.style.width = '33%';
+            const speed = parseInt(speedSlider.value);
+            const kers = parseInt(kersSlider.value);
+            const cruise = cruiseToggle.checked ? 1 : 0;
+            
+            // Step 1: Region to Global (0x01) to allow high speeds
+            flashStatusText.textContent = 'Setting Custom Region...';
+            progressFill.style.width = '25%';
             await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x01]);
-            await sleep(500);
+            await sleep(400);
 
-            // Step 2: Speed Limit to 32
-            flashStatusText.textContent = 'Unlocking 32 km/h...';
-            progressFill.style.width = '66%';
-            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [32]);
-            await sleep(500);
+            // Step 2: Speed Limit
+            flashStatusText.textContent = `Pushing Speed Limit (${speed} km/h)...`;
+            progressFill.style.width = '50%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [speed]);
+            await sleep(400);
 
-            // Step 3: Verify & Finish
-            flashStatusText.textContent = 'Success! Scooter Unlocked.';
+            // Step 3: KERS
+            flashStatusText.textContent = 'Applying KERS Level...';
+            progressFill.style.width = '75%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_KERS, [kers]);
+            await sleep(400);
+            
+            // Step 4: Cruise Control
+            flashStatusText.textContent = 'Writing Cruise Control...';
             progressFill.style.width = '100%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_CRUISE, [cruise]);
+            await sleep(400);
+
+            flashStatusText.textContent = 'Success! Settings Flashed to EEPROM.';
             
             setTimeout(() => {
-                flashBtn.classList.remove('disabled');
-                flashStatusText.textContent = 'Tuning complete.';
+                applyBtn.classList.remove('disabled');
+                flashStatusText.textContent = 'Ready.';
             }, 2000);
 
         } catch (err) {
             console.error('Flash error:', err);
-            flashStatusText.textContent = 'Flash Failed. Try again.';
+            flashStatusText.textContent = 'Flash Failed. Check connection.';
             progressFill.style.backgroundColor = 'var(--error)';
             setTimeout(() => {
-                flashBtn.classList.remove('disabled');
+                applyBtn.classList.remove('disabled');
                 progressFill.style.backgroundColor = 'var(--accent)';
                 progressFill.style.width = '0%';
                 progressContainer.classList.add('hidden');
