@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ST3 Pro Tuning | Schneller Fahren</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-glow"></div>
+
+    <main class="app-container">
+        <!-- Header -->
+        <header>
+            <h1 class="brand-title">ST3 PRO <span>TUNING</span></h1>
+            <div class="status-pill" id="connectionStatus">
+                <span class="dot"></span>
+                <span class="text">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- License Validation Screen -->
+        <section id="licenseScreen" class="glass-panel active">
+            <h2>Activate License</h2>
+            <p>Please enter your digital license code to access the tuning module.</p>
+            <div class="input-group">
+                <input type="text" id="licenseInput" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off">
+                <button id="validateBtn" class="btn primary">Validate</button>
+            </div>
+            <p id="licenseError" class="error-text hidden">Invalid code. Check your email.</p>
+        </section>
+
+        <!-- Tuning Dashboard -->
+        <section id="tuningDashboard" class="glass-panel hidden">
+            <div class="dashboard-header">
+                <h2>Control Panel</h2>
+                <button id="connectBtn" class="btn outline">Connect Scooter</button>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-info">
+                    <h3>32 km/h Unlock</h3>
+                    <p>Removes factory limits. Flashes custom region and speed constraints to the EEPROM.</p>
+                </div>
+                <button id="flashBtn" class="btn primary disabled">Flash Firmware</button>
+            </div>
+
+            <div class="progress-container hidden" id="flashProgressContainer">
+                <p id="flashStatusText">Initializing...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="flashProgressFill"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Dependencies -->
+    <script src="protocol.js"></script>
+    <script src="ble.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

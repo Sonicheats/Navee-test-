@@ -1,0 +1,16 @@
+{
+  "appId": "com.schnellerfahren.naveetuner",
+  "appName": "ST3 Tuner",
+  "webDir": "src",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Scanning for Scooter...",
+        "cancel": "Cancel",
+        "availableDevices": "Available Devices",
+        "noDeviceFound": "No device found"
+      }
+    }
+  }
+}
