@@ -36,11 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- BLE Connection ---
     connectBtn.addEventListener('click', async () => {
         try {
-            if (NaveeBLE.isConnected()) {
+            if (NaveeBLE.connected) {
                 await NaveeBLE.disconnect();
             } else {
                 connectBtn.textContent = 'Scanning...';
-                await NaveeBLE.connect();
+                await NaveeBLE.scanAndConnect();
             }
         } catch (err) {
             console.error('Connection error:', err);
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Flashing the Scooter ---
     applyBtn.addEventListener('click', async () => {
-        if (!NaveeBLE.isConnected()) return;
+        if (!NaveeBLE.connected) return;
 
         applyBtn.classList.add('disabled');
         progressContainer.classList.remove('hidden');
