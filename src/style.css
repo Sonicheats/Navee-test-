@@ -238,6 +238,11 @@ input:checked + .slider.round {
     box-shadow: 0 0 10px var(--accent-glow);
 }
 
+input:checked + .slider.round.led-slider {
+    background-color: #ff00ff; /* Neon pink for LEDs */
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+}
+
 input:checked + .slider.round:before {
     transform: translateX(26px);
     background-color: var(--bg-color);

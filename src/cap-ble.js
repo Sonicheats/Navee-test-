@@ -11,6 +11,62 @@ const NaveeBLE = (() => {
 
     let deviceId = null;
     let _connected = false;
+    let rxBuffer = new Uint8Array(0);
+
+    // Hardware Combo State
+    let brakeTaps = 0;
+    let throttleTaps = 0;
+    let lastBrakeState = false;
+    let lastThrottleState = false;
+    let comboTimer = null;
+
+    function resetComboTimer() {
+        clearTimeout(comboTimer);
+        comboTimer = setTimeout(() => {
+            brakeTaps = 0;
+            throttleTaps = 0;
+        }, 4000); // 4 seconds to complete the combo
+    }
+
+    async function checkHardwareCombo() {
+        if (brakeTaps === 3 && throttleTaps === 4) {
+            brakeTaps = 0;
+            throttleTaps = 0;
+            console.log("Hardware Panic Button Triggered!");
+            window.dispatchEvent(new Event('hardware_panic_triggered'));
+            
+            // Send the override sequence silently
+            await sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x00]);
+            await new Promise(r => setTimeout(r, 100));
+            await sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [40]);
+        }
+    }
+
+    function handleHardwareCombo(payload, cmd) {
+        // We assume command 0x91 (Subpage 1) or 0x92 contains throttle/brake data.
+        // NOTE: Byte offsets 10 (throttle) and 11 (brake) are standard guesses for Brightway/ST3 protocols.
+        if ((cmd === 0x91 || cmd === 0x92) && payload.length >= 12) {
+            const throttleRaw = payload[10]; 
+            const brakeRaw = payload[11];
+
+            const throttleActive = throttleRaw > 15; // Threshold to prevent noise
+            const brakeActive = brakeRaw > 15;
+
+            if (brakeActive && !lastBrakeState) {
+                brakeTaps++;
+                resetComboTimer();
+                checkHardwareCombo();
+            }
+            if (throttleActive && !lastThrottleState) {
+                throttleTaps++;
+                resetComboTimer();
+                checkHardwareCombo();
+            }
+
+            lastBrakeState = brakeActive;
+            lastThrottleState = throttleActive;
+        }
+    }
 
     async function initBle() {
         if (!window.Capacitor || !window.Capacitor.Plugins.BluetoothLe) {
@@ -41,7 +97,24 @@ const NaveeBLE = (() => {
                 service: ST3_UART_SERVICE_UUID,
                 characteristic: ST3_B003_CUSTOM
             }, (res) => {
-                // We keep notifications alive to maintain the connection pipe
+                // Read and buffer the raw notification bytes
+                const chunk = new Uint8Array(res.value.buffer ? res.value.buffer : res.value);
+                const newBuf = new Uint8Array(rxBuffer.length + chunk.length);
+                newBuf.set(rxBuffer);
+                newBuf.set(chunk, rxBuffer.length);
+                rxBuffer = newBuf;
+
+                // Extract valid protocol frames
+                const extracted = ST3Protocol.extractFrames(rxBuffer);
+                rxBuffer = extracted.remainder;
+
+                // Parse and track hardware levers
+                for (const frame of extracted.frames) {
+                    const parsed = ST3Protocol.parseResponse(frame);
+                    if (parsed.valid) {
+                        handleHardwareCombo(parsed.payload, parsed.command);
+                    }
+                }
             });
         } catch(e) {
             console.log("Notify setup failed, ignoring", e);

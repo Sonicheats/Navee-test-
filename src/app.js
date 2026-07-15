@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const kersSlider = document.getElementById('kersSlider');
     const kersValue = document.getElementById('kersValue');
     const cruiseToggle = document.getElementById('cruiseToggle');
+    const ledToggle = document.getElementById('ledToggle');
     const applyBtn = document.getElementById('applyBtn');
     
     const progressContainer = document.getElementById('flashProgressContainer');
@@ -96,8 +97,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Step 4: Cruise Control
             flashStatusText.textContent = 'Writing Cruise Control...';
-            progressFill.style.width = '100%';
+            progressFill.style.width = '85%';
             await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_CRUISE, [cruise]);
+            await sleep(400);
+
+            // Step 5: Side LEDs
+            const ledOn = ledToggle.checked ? 1 : 0;
+            flashStatusText.textContent = 'Setting LED State...';
+            progressFill.style.width = '100%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_LIGHT, [ledOn]);
             await sleep(400);
 
             flashStatusText.textContent = 'Success! Settings Flashed to EEPROM.';
@@ -118,6 +126,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressContainer.classList.add('hidden');
             }, 3000);
         }
+    });
+
+    // --- Hidden Panic Button Override ---
+    let panicTaps = 0;
+    let panicTimer;
+    const brandTitle = document.querySelector('.brand-title');
+    
+    brandTitle.addEventListener('click', async () => {
+        if (!NaveeBLE.connected) return;
+        
+        panicTaps++;
+        clearTimeout(panicTimer);
+        
+        if (panicTaps >= 3) {
+            panicTaps = 0;
+            brandTitle.style.color = '#ff3366'; // Flash red
+            brandTitle.style.textShadow = '0 0 15px rgba(255,51,102,0.8)';
+            
+            // Instantly bypass restrictions
+            try {
+                await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x00]); // Unrestricted region
+                await sleep(100);
+                await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [40]); // Max out speed limit logic
+                
+                statusText.textContent = 'OVERRIDE ACTIVE';
+                statusText.style.color = '#ff3366';
+            } catch(e) {
+                console.error("Panic sequence failed", e);
+            }
+            
+            setTimeout(() => {
+                brandTitle.style.color = '';
+                brandTitle.style.textShadow = '';
+                statusText.textContent = 'Connected';
+                statusText.style.color = '';
+            }, 3000);
+        } else {
+            panicTimer = setTimeout(() => {
+                panicTaps = 0;
+            }, 500); // Reset tap counter if slower than 500ms
+        }
+    });
+
+    window.addEventListener('hardware_panic_triggered', () => {
+        brandTitle.style.color = '#ff3366'; // Flash red
+        brandTitle.style.textShadow = '0 0 15px rgba(255,51,102,0.8)';
+        statusText.textContent = 'OVERRIDE ACTIVE (HARDWARE)';
+        statusText.style.color = '#ff3366';
+        
+        setTimeout(() => {
+            brandTitle.style.color = '';
+            brandTitle.style.textShadow = '';
+            statusText.textContent = 'Connected';
+            statusText.style.color = '';
+        }, 3000);
     });
 
     function sleep(ms) {
