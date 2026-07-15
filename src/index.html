@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ST3 Pro Tuning | Schneller Fahren</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
@@ -20,93 +20,69 @@
             </div>
         </header>
 
-        <!-- Tuning Dashboard -->
-        <section id="tuningDashboard" class="glass-panel active">
-            <!-- Live Telemetry HUD -->
+        <!-- Tab 1: Dashboard -->
+        <section id="tab-dashboard" class="glass-panel tab-content active">
             <div id="telemetryHud" class="hud-container disabled">
-                <div class="hud-item">
-                    <span class="hud-label">VOLTAGE</span>
-                    <span id="hudVoltage" class="hud-value">--.- V</span>
-                </div>
-                <div class="hud-item">
-                    <span class="hud-label">TEMP</span>
-                    <span id="hudTemp" class="hud-value">-- °C</span>
-                </div>
-                <div class="hud-item">
-                    <span class="hud-label">CURRENT</span>
-                    <span id="hudAmps" class="hud-value">--.- A</span>
-                </div>
+                <div class="hud-item"><span class="hud-label">VOLTAGE</span><span id="hudVoltage" class="hud-value">--.- V</span></div>
+                <div class="hud-item"><span class="hud-label">TEMP</span><span id="hudTemp" class="hud-value">-- °C</span></div>
+                <div class="hud-item"><span class="hud-label">CURRENT</span><span id="hudAmps" class="hud-value">--.- A</span></div>
             </div>
-
             <button id="connectBtn" class="btn outline connect-btn">Connect Scooter</button>
+            <button id="lockBtn" class="btn danger lock-btn disabled" style="margin-top: 15px;">LOCK DOWN</button>
+            
+            <!-- Debug Console -->
+            <section id="debugConsole" style="background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; margin-top: 20px; height: 150px; overflow-y: auto; border: 1px solid #0f0; border-radius: 8px;">
+                <div>--- SYSTEM LOG ---</div>
+            </section>
+        </section>
 
-            <div class="tuning-controls disabled" id="controlsSection">
-                
+        <!-- Tab 2: Tuning -->
+        <section id="tab-tuning" class="glass-panel tab-content" style="display: none;">
+            <div class="tuning-controls disabled" id="controlsSectionTuning">
                 <div class="control-group">
-                    <div class="control-header">
-                        <label>Speed Limit</label>
-                        <span id="speedValue" class="value-display">20 km/h</span>
-                    </div>
+                    <div class="control-header"><label>Speed Limit</label><span id="speedValue" class="value-display">20 km/h</span></div>
                     <input type="range" id="speedSlider" min="5" max="40" value="20" class="neon-slider">
                 </div>
-
                 <div class="control-group">
-                    <div class="control-header">
-                        <label>KERS Level</label>
-                        <span id="kersValue" class="value-display">Medium</span>
-                    </div>
+                    <div class="control-header"><label>KERS Level</label><span id="kersValue" class="value-display">Medium</span></div>
                     <input type="range" id="kersSlider" min="0" max="3" value="2" class="neon-slider">
                 </div>
-
                 <div class="control-group">
-                    <div class="control-header">
-                        <label>Push-to-Start Speed</label>
-                        <span id="startupValue" class="value-display">5 km/h</span>
-                    </div>
+                    <div class="control-header"><label>Push-to-Start Speed</label><span id="startupValue" class="value-display">5 km/h</span></div>
                     <input type="range" id="startupSlider" min="0" max="5" value="5" class="neon-slider">
                 </div>
-
-                <div class="control-group">
-                    <div class="control-header">
-                        <label>Motor Torque Limit</label>
-                        <span id="torqueValue" class="value-display">25 A</span>
-                    </div>
+                <div class="control-group" style="margin-bottom:0;">
+                    <div class="control-header"><label>Motor Torque Limit</label><span id="torqueValue" class="value-display">25 A</span></div>
                     <input type="range" id="torqueSlider" min="15" max="32" value="25" class="neon-slider">
                 </div>
-
-                <div class="toggle-group">
-                    <label>Cruise Control</label>
-                    <label class="switch">
-                        <input type="checkbox" id="cruiseToggle">
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-
-                <div class="toggle-group">
-                    <label>Side LEDs</label>
-                    <label class="switch">
-                        <input type="checkbox" id="ledToggle">
-                        <span class="slider round led-slider"></span>
-                    </label>
-                </div>
-
-                <button id="applyBtn" class="btn primary apply-btn">Flash Firmware</button>
-                
-                <div class="progress-container hidden" id="flashProgressContainer">
-                    <p id="flashStatusText">Initializing...</p>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="flashProgressFill"></div>
-                    </div>
-                </div>
-
-                <button id="lockBtn" class="btn danger lock-btn">LOCK DOWN</button>
             </div>
         </section>
 
-        <!-- Debug Console -->
-        <section id="debugConsole" style="background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; margin-top: 20px; height: 150px; overflow-y: auto; border: 1px solid #0f0;">
-            <div>--- SYSTEM LOG ---</div>
+        <!-- Tab 3: Advanced -->
+        <section id="tab-advanced" class="glass-panel tab-content" style="display: none;">
+            <div class="tuning-controls disabled" id="controlsSectionAdvanced">
+                <div class="toggle-group">
+                    <label>Cruise Control</label>
+                    <label class="switch"><input type="checkbox" id="cruiseToggle"><span class="slider round"></span></label>
+                </div>
+                <div class="toggle-group">
+                    <label>Side LEDs</label>
+                    <label class="switch"><input type="checkbox" id="ledToggle"><span class="slider round led-slider"></span></label>
+                </div>
+                <button id="applyBtn" class="btn primary apply-btn">Flash Firmware</button>
+                <div class="progress-container hidden" id="flashProgressContainer">
+                    <p id="flashStatusText">Initializing...</p>
+                    <div class="progress-bar"><div class="progress-fill" id="flashProgressFill"></div></div>
+                </div>
+            </div>
         </section>
+        
+        <!-- Bottom Tab Bar -->
+        <nav class="bottom-tab-bar">
+            <button class="tab-btn active" data-target="tab-dashboard">Dashboard</button>
+            <button class="tab-btn" data-target="tab-tuning">Tuning</button>
+            <button class="tab-btn" data-target="tab-advanced">Advanced</button>
+        </nav>
     </main>
 
     <!-- Dependencies -->

@@ -105,7 +105,9 @@ document.addEventListener('DOMContentLoaded', () => {
         statusPill.classList.add('connected');
         statusText.textContent = 'Connected';
         connectBtn.textContent = 'Disconnect';
-        controlsSection.classList.remove('disabled');
+        lockBtn.classList.remove('disabled');
+        document.getElementById('controlsSectionTuning').classList.remove('disabled');
+        document.getElementById('controlsSectionAdvanced').classList.remove('disabled');
         telemetryHud.classList.remove('disabled');
     });
 
@@ -113,12 +115,26 @@ document.addEventListener('DOMContentLoaded', () => {
         statusPill.classList.remove('connected');
         statusText.textContent = 'Disconnected';
         connectBtn.textContent = 'Connect Scooter';
-        controlsSection.classList.add('disabled');
+        lockBtn.classList.add('disabled');
+        document.getElementById('controlsSectionTuning').classList.add('disabled');
+        document.getElementById('controlsSectionAdvanced').classList.add('disabled');
         telemetryHud.classList.add('disabled');
         progressContainer.classList.add('hidden');
         hudVoltage.textContent = '--.- V';
         hudTemp.textContent = '-- °C';
         hudAmps.textContent = '--.- A';
+    });
+
+    // --- Tab Switching Logic ---
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            
+            e.target.classList.add('active');
+            const targetId = e.target.getAttribute('data-target');
+            document.getElementById(targetId).style.display = 'flex';
+        });
     });
 
     // --- Live Telemetry ---
