@@ -6,7 +6,8 @@
   "scripts": {
     "build": "echo 'No build step required'",
     "cap:sync": "npx cap sync",
-    "cap:build": "npx cap copy"
+    "cap:build": "npx cap copy",
+    "setup:perms": "node scripts/setup-permissions.js"
   },
   "dependencies": {
     "@capacitor/core": "^5.0.0",
