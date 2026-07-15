@@ -68,6 +68,18 @@ const NaveeBLE = (() => {
         }
     }
 
+    function handleTelemetry(payload, cmd) {
+        if (cmd === 0x72 && payload.length >= 12) {
+            const voltage = (payload[2] | (payload[3]<<8) | (payload[4]<<16) | (payload[5]<<24)) / 1000;
+            const current = (payload[6] | (payload[7]<<8) | (payload[8]<<16) | (payload[9]<<24)) / 1000;
+            const temp = payload[11];
+            
+            window.dispatchEvent(new CustomEvent('telemetry_update', {
+                detail: { voltage, current, temp }
+            }));
+        }
+    }
+
     async function initBle() {
         if (!window.Capacitor || !window.Capacitor.Plugins.BluetoothLe) {
             throw new Error("Native Bluetooth plugin not found. Build the APK/IPA.");
@@ -108,11 +120,12 @@ const NaveeBLE = (() => {
                 const extracted = ST3Protocol.extractFrames(rxBuffer);
                 rxBuffer = extracted.remainder;
 
-                // Parse and track hardware levers
+                // Parse and track hardware levers and telemetry
                 for (const frame of extracted.frames) {
                     const parsed = ST3Protocol.parseResponse(frame);
                     if (parsed.valid) {
                         handleHardwareCombo(parsed.payload, parsed.command);
+                        handleTelemetry(parsed.payload, parsed.command);
                     }
                 }
             });
@@ -147,6 +160,22 @@ const NaveeBLE = (() => {
                 break;
             case NaveeProtocol.CMD.WRITE_KERS:
                 st3Cmd = 0x53;
+                st3Payload = [payload[0]];
+                break;
+            case NaveeProtocol.CMD.WRITE_STARTUP_SPEED:
+                st3Cmd = 0x6A; // ST3 Start speed
+                st3Payload = [payload[0]];
+                break;
+            case NaveeProtocol.CMD.WRITE_MOTOR_LIMIT:
+                st3Cmd = 0x5B; // ST3 Motor Phase Limit (Amps)
+                st3Payload = [payload[0]];
+                break;
+            case NaveeProtocol.CMD.WRITE_LOCK:
+                st3Cmd = 0x51; // ST3 Lock control
+                st3Payload = [payload[0]];
+                break;
+            case NaveeProtocol.CMD.WRITE_LIGHT:
+                st3Cmd = 0x54; // ST3 Headlight/LEDs
                 st3Payload = [payload[0]];
                 break;
         }

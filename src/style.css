@@ -274,6 +274,24 @@ input:checked + .slider.round:before {
     transform: translateY(-2px);
 }
 
+.btn.danger {
+    background: var(--error);
+    color: #fff;
+    box-shadow: 0 0 15px rgba(255, 51, 102, 0.4);
+    margin-top: 1rem;
+}
+
+.btn.danger:hover {
+    box-shadow: 0 0 25px rgba(255, 51, 102, 0.6);
+    transform: translateY(-2px);
+}
+
+.btn.danger.locked {
+    background: transparent;
+    border: 2px solid var(--error);
+    color: var(--error);
+}
+
 .btn.outline {
     background: transparent;
     color: var(--text-primary);
@@ -319,4 +337,43 @@ input:checked + .slider.round:before {
     background: var(--accent);
     box-shadow: 0 0 10px var(--accent-glow);
     transition: width 0.3s ease;
+}
+
+/* Telemetry HUD */
+.hud-container {
+    display: flex;
+    justify-content: space-between;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    transition: opacity 0.3s ease;
+}
+
+.hud-container.disabled {
+    opacity: 0.3;
+    filter: blur(2px);
+}
+
+.hud-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.hud-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+}
+
+.hud-value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent-glow);
 }

@@ -9,15 +9,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('connectionStatus');
     const statusText = statusPill.querySelector('.text');
     const controlsSection = document.getElementById('controlsSection');
-    
+
     const speedSlider = document.getElementById('speedSlider');
     const speedValue = document.getElementById('speedValue');
     const kersSlider = document.getElementById('kersSlider');
     const kersValue = document.getElementById('kersValue');
+    const startupSlider = document.getElementById('startupSlider');
+    const startupValue = document.getElementById('startupValue');
+    const torqueSlider = document.getElementById('torqueSlider');
+    const torqueValue = document.getElementById('torqueValue');
     const cruiseToggle = document.getElementById('cruiseToggle');
     const ledToggle = document.getElementById('ledToggle');
     const applyBtn = document.getElementById('applyBtn');
+    const lockBtn = document.getElementById('lockBtn');
     
+    // HUD Elements
+    const hudVoltage = document.getElementById('hudVoltage');
+    const hudTemp = document.getElementById('hudTemp');
+    const hudAmps = document.getElementById('hudAmps');
+    const telemetryHud = document.getElementById('telemetryHud');
+
     const progressContainer = document.getElementById('flashProgressContainer');
     const progressFill = document.getElementById('flashProgressFill');
     const flashStatusText = document.getElementById('flashStatusText');
@@ -32,6 +43,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     kersSlider.addEventListener('input', (e) => {
         kersValue.textContent = KERS_LABELS[e.target.value];
+    });
+
+    startupSlider.addEventListener('input', (e) => {
+        startupValue.textContent = `${e.target.value} km/h`;
+    });
+
+    torqueSlider.addEventListener('input', (e) => {
+        torqueValue.textContent = `${e.target.value} A`;
     });
 
     // --- BLE Connection ---
@@ -55,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.textContent = 'Connected';
         connectBtn.textContent = 'Disconnect';
         controlsSection.classList.remove('disabled');
+        telemetryHud.classList.remove('disabled');
     });
 
     window.addEventListener('navee_disconnected', () => {
@@ -62,7 +82,40 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.textContent = 'Disconnected';
         connectBtn.textContent = 'Connect Scooter';
         controlsSection.classList.add('disabled');
+        telemetryHud.classList.add('disabled');
         progressContainer.classList.add('hidden');
+        hudVoltage.textContent = '--.- V';
+        hudTemp.textContent = '-- °C';
+        hudAmps.textContent = '--.- A';
+    });
+
+    // --- Live Telemetry ---
+    window.addEventListener('telemetry_update', (e) => {
+        const data = e.detail;
+        hudVoltage.textContent = `${data.voltage.toFixed(1)} V`;
+        hudAmps.textContent = `${data.current.toFixed(1)} A`;
+        hudTemp.textContent = `${data.temp} °C`;
+    });
+
+    // --- Stealth Lock ---
+    let isLocked = false;
+    lockBtn.addEventListener('click', async () => {
+        if (!NaveeBLE.connected) return;
+        isLocked = !isLocked;
+        try {
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_LOCK, [isLocked ? 1 : 0]);
+            if (isLocked) {
+                lockBtn.classList.add('locked');
+                lockBtn.textContent = 'UNLOCK SCOOTER';
+                document.body.style.boxShadow = 'inset 0 0 50px rgba(255, 51, 102, 0.2)';
+            } else {
+                lockBtn.classList.remove('locked');
+                lockBtn.textContent = 'LOCK DOWN';
+                document.body.style.boxShadow = 'none';
+            }
+        } catch (err) {
+            console.error('Lock error:', err);
+        }
     });
 
     // --- Flashing the Scooter ---
@@ -71,45 +124,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
         applyBtn.classList.add('disabled');
         progressContainer.classList.remove('hidden');
-        
+
         try {
             const speed = parseInt(speedSlider.value);
             const kers = parseInt(kersSlider.value);
+            const startup = parseInt(startupSlider.value);
+            const torque = parseInt(torqueSlider.value);
             const cruise = cruiseToggle.checked ? 1 : 0;
+            const ledOn = ledToggle.checked ? 1 : 0;
             
             // Step 1: Region to Global (0x01) to allow high speeds
             flashStatusText.textContent = 'Setting Custom Region...';
-            progressFill.style.width = '25%';
+            progressFill.style.width = '15%';
             await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x01]);
             await sleep(400);
 
             // Step 2: Speed Limit
             flashStatusText.textContent = `Pushing Speed Limit (${speed} km/h)...`;
-            progressFill.style.width = '50%';
+            progressFill.style.width = '30%';
             await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [speed]);
             await sleep(400);
 
-            // Step 3: KERS
+            // Step 3: Startup Speed (Zero-Start)
+            flashStatusText.textContent = `Writing Startup Speed (${startup} km/h)...`;
+            progressFill.style.width = '45%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_STARTUP_SPEED, [startup]);
+            await sleep(400);
+
+            // Step 4: Motor Limit (Torque)
+            flashStatusText.textContent = `Injecting Motor Phase Limit (${torque}A)...`;
+            progressFill.style.width = '60%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_MOTOR_LIMIT, [torque]);
+            await sleep(400);
+
+            // Step 5: KERS
             flashStatusText.textContent = 'Applying KERS Level...';
             progressFill.style.width = '75%';
             await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_KERS, [kers]);
             await sleep(400);
             
-            // Step 4: Cruise Control
-            flashStatusText.textContent = 'Writing Cruise Control...';
-            progressFill.style.width = '85%';
-            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_CRUISE, [cruise]);
-            await sleep(400);
-
-            // Step 5: Side LEDs
-            const ledOn = ledToggle.checked ? 1 : 0;
-            flashStatusText.textContent = 'Setting LED State...';
+            // Step 6: Cruise Control & LEDs
+            flashStatusText.textContent = 'Finalizing Toggles...';
             progressFill.style.width = '100%';
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_CRUISE, [cruise]);
+            await sleep(200);
             await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_LIGHT, [ledOn]);
             await sleep(400);
 
             flashStatusText.textContent = 'Success! Settings Flashed to EEPROM.';
-            
+
             setTimeout(() => {
                 applyBtn.classList.remove('disabled');
                 flashStatusText.textContent = 'Ready.';
@@ -132,30 +195,30 @@ document.addEventListener('DOMContentLoaded', () => {
     let panicTaps = 0;
     let panicTimer;
     const brandTitle = document.querySelector('.brand-title');
-    
+
     brandTitle.addEventListener('click', async () => {
         if (!NaveeBLE.connected) return;
-        
+
         panicTaps++;
         clearTimeout(panicTimer);
-        
+
         if (panicTaps >= 3) {
             panicTaps = 0;
             brandTitle.style.color = '#ff3366'; // Flash red
             brandTitle.style.textShadow = '0 0 15px rgba(255,51,102,0.8)';
-            
+
             // Instantly bypass restrictions
             try {
                 await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x00]); // Unrestricted region
                 await sleep(100);
                 await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [40]); // Max out speed limit logic
-                
+
                 statusText.textContent = 'OVERRIDE ACTIVE';
                 statusText.style.color = '#ff3366';
-            } catch(e) {
+            } catch (e) {
                 console.error("Panic sequence failed", e);
             }
-            
+
             setTimeout(() => {
                 brandTitle.style.color = '';
                 brandTitle.style.textShadow = '';
@@ -174,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         brandTitle.style.textShadow = '0 0 15px rgba(255,51,102,0.8)';
         statusText.textContent = 'OVERRIDE ACTIVE (HARDWARE)';
         statusText.style.color = '#ff3366';
-        
+
         setTimeout(() => {
             brandTitle.style.color = '';
             brandTitle.style.textShadow = '';

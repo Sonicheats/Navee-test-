@@ -22,6 +22,22 @@
 
         <!-- Tuning Dashboard -->
         <section id="tuningDashboard" class="glass-panel active">
+            <!-- Live Telemetry HUD -->
+            <div id="telemetryHud" class="hud-container disabled">
+                <div class="hud-item">
+                    <span class="hud-label">VOLTAGE</span>
+                    <span id="hudVoltage" class="hud-value">--.- V</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">TEMP</span>
+                    <span id="hudTemp" class="hud-value">-- °C</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">CURRENT</span>
+                    <span id="hudAmps" class="hud-value">--.- A</span>
+                </div>
+            </div>
+
             <button id="connectBtn" class="btn outline connect-btn">Connect Scooter</button>
 
             <div class="tuning-controls disabled" id="controlsSection">
@@ -40,6 +56,22 @@
                         <span id="kersValue" class="value-display">Medium</span>
                     </div>
                     <input type="range" id="kersSlider" min="0" max="3" value="2" class="neon-slider">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <label>Push-to-Start Speed</label>
+                        <span id="startupValue" class="value-display">5 km/h</span>
+                    </div>
+                    <input type="range" id="startupSlider" min="0" max="5" value="5" class="neon-slider">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <label>Motor Torque Limit</label>
+                        <span id="torqueValue" class="value-display">25 A</span>
+                    </div>
+                    <input type="range" id="torqueSlider" min="15" max="32" value="25" class="neon-slider">
                 </div>
 
                 <div class="toggle-group">
@@ -66,6 +98,8 @@
                         <div class="progress-fill" id="flashProgressFill"></div>
                     </div>
                 </div>
+
+                <button id="lockBtn" class="btn danger lock-btn">LOCK DOWN</button>
             </div>
         </section>
     </main>
