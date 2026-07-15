@@ -19,6 +19,10 @@ const IOS_PERMISSIONS = `
 	<string>Needs Bluetooth to connect to the ST3 Pro.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Needs Bluetooth to connect to the ST3 Pro.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
 `;
 
 function injectAndroid() {
