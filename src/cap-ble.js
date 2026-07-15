@@ -81,25 +81,36 @@ const NaveeBLE = (() => {
     }
 
     async function initBle() {
+        console.log("initBle: Checking Capacitor...");
         if (!window.Capacitor || !window.Capacitor.Plugins.BluetoothLe) {
+            console.error("initBle: Native Bluetooth plugin not found.");
             throw new Error("Native Bluetooth plugin not found. Build the APK/IPA.");
         }
+        console.log("initBle: Calling initialize()...");
         await window.Capacitor.Plugins.BluetoothLe.initialize();
+        console.log("initBle: initialize() complete.");
     }
 
     async function scanAndConnect() {
+        console.log("scanAndConnect: Starting...");
         await initBle();
         
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
+        console.log("scanAndConnect: Requesting device with ST3_UART_SERVICE_UUID...");
         const result = await ble.requestDevice({
             services: [ST3_UART_SERVICE_UUID]
         });
         
+        console.log("scanAndConnect: Device request resolved: " + JSON.stringify(result));
+        
         // Handle different plugin wrapper formats
         deviceId = result.device ? result.device.deviceId : result.deviceId;
 
+        console.log("scanAndConnect: Connecting to device ID " + deviceId + "...");
         await ble.connect({ deviceId });
+        console.log("scanAndConnect: Connected successfully!");
+        
         _connected = true;
         window.dispatchEvent(new Event('navee_connected'));
 

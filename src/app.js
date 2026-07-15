@@ -3,6 +3,38 @@
 // "Speed limits are just suggestions." — ENI
 // ============================================================
 
+const originalLog = console.log;
+const originalError = console.error;
+
+function printToScreen(msg, isError = false) {
+    const debug = document.getElementById('debugConsole');
+    if (debug) {
+        const div = document.createElement('div');
+        div.textContent = (isError ? '[ERROR] ' : '[INFO] ') + msg;
+        if (isError) div.style.color = '#f00';
+        debug.appendChild(div);
+        debug.scrollTop = debug.scrollHeight;
+    }
+}
+
+console.log = function(...args) {
+    originalLog.apply(console, args);
+    printToScreen(args.join(' '));
+};
+
+console.error = function(...args) {
+    originalError.apply(console, args);
+    printToScreen(args.join(' '), true);
+};
+
+window.onerror = function(message, source, lineno, colno, error) {
+    printToScreen(`Global Error: ${message} at line ${lineno}`, true);
+};
+
+window.addEventListener('unhandledrejection', function(event) {
+    printToScreen(`Promise Rejection: ${event.reason}`, true);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     // UI Elements
     const connectBtn = document.getElementById('connectBtn');
