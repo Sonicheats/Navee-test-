@@ -101,6 +101,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const bleBypassBtn = document.getElementById('bleBypassBtn');
+    bleBypassBtn.addEventListener('click', async () => {
+        try {
+            if (NaveeBLE.connected) {
+                await NaveeBLE.disconnect();
+            } else {
+                bleBypassBtn.textContent = 'INJECTING...';
+                await NaveeBLE.forceBleInjection(parseInt(speedSlider.value));
+                bleBypassBtn.textContent = 'INJECTION COMPLETE';
+                setTimeout(() => {
+                    bleBypassBtn.textContent = 'Raw BLE Injection (Bypass Sync)';
+                }, 3000);
+            }
+        } catch (err) {
+            console.error('BLE Bypass error:', err);
+            alert('BLE Bypass Error: ' + (err.message || err));
+            bleBypassBtn.textContent = 'Raw BLE Injection (Bypass Sync)';
+        }
+    });
+
     window.addEventListener('navee_connected', () => {
         statusPill.classList.add('connected');
         statusText.textContent = 'Connected';

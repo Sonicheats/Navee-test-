@@ -160,6 +160,56 @@ const NaveeBLE = (() => {
         }
     }
 
+    async function forceBleInjection(speedLimit = 40) {
+        console.log("forceBleInjection: Initiating BRUTE FORCE BLE Bypass...");
+        await initBle();
+        const ble = window.Capacitor.Plugins.BluetoothLe;
+        
+        // Scan for ANY device advertising the ST3 UART, but we don't care about setting up notifications
+        const result = await ble.requestDevice({
+            services: [ST3_UART_SERVICE_UUID]
+        });
+        
+        deviceId = result.device ? result.device.deviceId : result.deviceId;
+        console.log("forceBleInjection: Hooked device " + deviceId);
+        
+        // Force connect
+        await ble.connect({ deviceId });
+        _connected = true;
+        window.dispatchEvent(new Event('navee_connected'));
+
+        // Skip all notification/telemetry setup. Just build the speed unlock payload
+        const st3Payload = [speedLimit];
+        const packetRegion = ST3Protocol.buildWriteCommand(0x6B, [0x00]); // Region 0
+        const packetSpeed = ST3Protocol.buildWriteCommand(0x6B, st3Payload); // Max speed
+        
+        const chunks = [Array.from(packetRegion), Array.from(packetSpeed)];
+        
+        console.log("forceBleInjection: SPAMMING PAYLOADS TO ALL CHANNELS...");
+        // Spam the payload to B001, B002, and B003 blindly to guarantee it hits
+        const targets = [ST3_B001_CUSTOM, ST3_B003_CUSTOM];
+        
+        for (let i = 0; i < 5; i++) { // Loop 5 times aggressively
+            for (const target of targets) {
+                for (const chunk of chunks) {
+                    try {
+                        const buffer = new Uint8Array(chunk);
+                        const dataView = new DataView(buffer.buffer);
+                        await ble.write({
+                            deviceId,
+                            service: ST3_UART_SERVICE_UUID,
+                            characteristic: target,
+                            value: dataView 
+                        });
+                    } catch(e) { /* Ignore errors, just keep spamming */ }
+                }
+            }
+            await new Promise(r => setTimeout(r, 100)); // 100ms delay between barrages
+        }
+        
+        console.log("forceBleInjection: Injection sequence complete.");
+    }
+
     async function sendCommand(command, payload = []) {
         if (!_connected) return;
         
@@ -236,6 +286,7 @@ const NaveeBLE = (() => {
 
     return {
         scanAndConnect,
+        forceBleInjection,
         disconnect,
         sendCommand,
         get connected() { return _connected; }
