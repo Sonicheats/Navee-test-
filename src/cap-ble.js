@@ -171,18 +171,11 @@ const NaveeBLE = (() => {
         let result;
 
         try {
-            // Try standard native pop-up first
-            result = await ble.requestDevice({
-                acceptAllDevices: true
-            });
-        } catch (e) {
-            console.log("scanAndConnect: Native popup rejected, falling back to custom iOS picker...");
-            try {
-                result = await showIOSPicker();
-            } catch(e2) {
-                console.error("iOS Picker failed:", e2);
-                throw e2;
-            }
+            // Force our custom HTML scanner to avoid native UI bugs and cancellation glitches
+            result = await showIOSPicker();
+        } catch(e) {
+            console.error("Custom Picker failed:", e);
+            throw e;
         }
         
         console.log("scanAndConnect: Device request resolved: " + JSON.stringify(result));
@@ -245,11 +238,10 @@ const NaveeBLE = (() => {
 
         let result;
         try {
-            result = await ble.requestDevice({
-                acceptAllDevices: true
-            });
-        } catch (e) {
             result = await showIOSPicker();
+        } catch(e) {
+            console.error("Custom Picker failed:", e);
+            throw e;
         }
         
         deviceId = result.device ? result.device.deviceId : result.deviceId;
