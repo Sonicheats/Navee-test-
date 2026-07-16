@@ -233,9 +233,56 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 applyBtn.classList.remove('disabled');
                 progressFill.style.backgroundColor = 'var(--accent)';
+            setTimeout(() => {
+                applyBtn.classList.remove('disabled');
+                progressFill.style.backgroundColor = 'var(--accent)';
                 progressFill.style.width = '0%';
                 progressContainer.classList.add('hidden');
             }, 3000);
+        }
+    });
+
+    // --- Firmware Bypass ---
+    const bypassBtn = document.getElementById('bypassBtn');
+    bypassBtn.addEventListener('click', async () => {
+        if (!NaveeBLE.connected) return;
+
+        bypassBtn.classList.add('disabled');
+        bypassBtn.textContent = 'FORCING OVERRIDE...';
+        
+        try {
+            // Rapid-fire the override payloads to bypass handshake drops
+            printToScreen('Initiating Firmware Bypass Sequence...');
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x00]); // Region 0 (Unrestricted)
+            await sleep(50); // Super tight timing to beat the disconnect
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [40]); // Max speed payload
+            await sleep(50);
+            
+            // Push it a second time just in case the controller dropped the first packet
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x00]);
+            await sleep(50);
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [40]);
+            
+            printToScreen('Bypass Payload Delivered.');
+            statusText.textContent = 'FIRMWARE BYPASSED';
+            statusText.style.color = '#ff3366';
+            document.body.style.boxShadow = 'inset 0 0 50px rgba(255, 51, 102, 0.2)';
+            
+            setTimeout(() => {
+                bypassBtn.classList.remove('disabled');
+                bypassBtn.textContent = 'Force Override (Bypass Firmware)';
+                statusText.textContent = 'Connected';
+                statusText.style.color = '';
+                document.body.style.boxShadow = 'none';
+            }, 4000);
+
+        } catch (err) {
+            console.error('Bypass error:', err);
+            bypassBtn.textContent = 'FAILED';
+            setTimeout(() => {
+                bypassBtn.classList.remove('disabled');
+                bypassBtn.textContent = 'Force Override (Bypass Firmware)';
+            }, 2000);
         }
     });
 
