@@ -106,15 +106,69 @@ const NaveeBLE = (() => {
         
         console.log("scanAndConnect: Requesting ANY device (bypassing all filters)...");
         let result;
+        
+        // Custom iOS Picker Fallback Logic
+        const showIOSPicker = async () => {
+            return new Promise(async (resolve, reject) => {
+                const scannerUI = document.getElementById('customScanner');
+                const listUI = document.getElementById('deviceList');
+                const cancelBtn = document.getElementById('cancelScanBtn');
+                
+                if(!scannerUI || !ble.requestLEScan) {
+                    reject(new Error("No native scanner available"));
+                    return;
+                }
+                
+                listUI.innerHTML = '';
+                scannerUI.classList.remove('hidden');
+                
+                let foundDevices = {};
+                
+                cancelBtn.onclick = async () => {
+                    await ble.stopLEScan();
+                    scannerUI.classList.add('hidden');
+                    reject(new Error("Scan cancelled"));
+                };
+
+                await ble.requestLEScan({
+                    services: [],
+                    allowDuplicates: false
+                }, (scanResult) => {
+                    if (scanResult && scanResult.device && !foundDevices[scanResult.device.deviceId]) {
+                        foundDevices[scanResult.device.deviceId] = true;
+                        
+                        const btn = document.createElement('button');
+                        btn.className = 'btn outline';
+                        btn.style.textAlign = 'left';
+                        btn.style.textTransform = 'none';
+                        const name = scanResult.device.name || "Unknown Device";
+                        btn.innerHTML = `<strong>${name}</strong><br><small style="color:#888;">${scanResult.device.deviceId}</small>`;
+                        
+                        btn.onclick = async () => {
+                            await ble.stopLEScan();
+                            scannerUI.classList.add('hidden');
+                            resolve(scanResult);
+                        };
+                        
+                        listUI.appendChild(btn);
+                    }
+                });
+            });
+        };
+
         try {
-            // Force the OS to show every single Bluetooth device nearby
+            // Try standard native pop-up first
             result = await ble.requestDevice({
                 acceptAllDevices: true
             });
         } catch (e) {
-            console.log("scanAndConnect: acceptAllDevices rejected, falling back to empty scan...");
-            // Absolute bare-minimum fallback
-            result = await ble.requestDevice({});
+            console.log("scanAndConnect: Native popup rejected, falling back to custom iOS picker...");
+            try {
+                result = await showIOSPicker();
+            } catch(e2) {
+                console.error("iOS Picker failed:", e2);
+                throw e2;
+            }
         }
         
         console.log("scanAndConnect: Device request resolved: " + JSON.stringify(result));
@@ -173,14 +227,52 @@ const NaveeBLE = (() => {
         await initBle();
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
-        // Force the OS to show every single Bluetooth device nearby
+        // Same Custom iOS Picker for Force Injection
+        const showIOSPicker = async () => {
+            return new Promise(async (resolve, reject) => {
+                const scannerUI = document.getElementById('customScanner');
+                const listUI = document.getElementById('deviceList');
+                const cancelBtn = document.getElementById('cancelScanBtn');
+                
+                if(!scannerUI || !ble.requestLEScan) return reject();
+                
+                listUI.innerHTML = '';
+                scannerUI.classList.remove('hidden');
+                let foundDevices = {};
+                
+                cancelBtn.onclick = async () => {
+                    await ble.stopLEScan();
+                    scannerUI.classList.add('hidden');
+                    reject(new Error("Scan cancelled"));
+                };
+
+                await ble.requestLEScan({ services: [] }, (scanResult) => {
+                    if (scanResult && scanResult.device && !foundDevices[scanResult.device.deviceId]) {
+                        foundDevices[scanResult.device.deviceId] = true;
+                        const btn = document.createElement('button');
+                        btn.className = 'btn outline';
+                        btn.style.textAlign = 'left';
+                        const name = scanResult.device.name || "Unknown Device";
+                        btn.innerHTML = `<strong>${name}</strong><br><small style="color:#888;">${scanResult.device.deviceId}</small>`;
+                        
+                        btn.onclick = async () => {
+                            await ble.stopLEScan();
+                            scannerUI.classList.add('hidden');
+                            resolve(scanResult);
+                        };
+                        listUI.appendChild(btn);
+                    }
+                });
+            });
+        };
+
         let result;
         try {
             result = await ble.requestDevice({
                 acceptAllDevices: true
             });
         } catch (e) {
-            result = await ble.requestDevice({});
+            result = await showIOSPicker();
         }
         
         deviceId = result.device ? result.device.deviceId : result.deviceId;

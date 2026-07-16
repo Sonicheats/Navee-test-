@@ -96,6 +96,13 @@
         </nav>
     </main>
 
+    <!-- Custom iOS Scanner Modal -->
+    <div id="customScanner" class="glass-panel hidden" style="position: absolute; z-index: 1000; top: 5%; left: 5%; width: 90%; height: 90%; overflow-y: auto; background: rgba(5,5,7,0.95); border: 2px solid var(--accent); padding-bottom: 20px;">
+        <h2 style="color: var(--accent); margin-bottom: 15px; font-family: 'Outfit', sans-serif;">Scanning for Devices...</h2>
+        <div id="deviceList" style="display:flex; flex-direction:column; gap:10px; margin-bottom: 20px;"></div>
+        <button id="cancelScanBtn" class="btn danger">Cancel Scan</button>
+    </div>
+
     <!-- Dependencies -->
     <script src="protocol.js"></script>
     <script src="cap-ble.js"></script>
