@@ -126,8 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.textContent = 'Connected';
         connectBtn.textContent = 'Disconnect';
         lockBtn.classList.remove('disabled');
-        document.getElementById('controlsSectionTuning').classList.remove('disabled');
-        document.getElementById('controlsSectionAdvanced').classList.remove('disabled');
         telemetryHud.classList.remove('disabled');
     });
 
@@ -136,8 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.textContent = 'Disconnected';
         connectBtn.textContent = 'Connect Scooter';
         lockBtn.classList.add('disabled');
-        document.getElementById('controlsSectionTuning').classList.add('disabled');
-        document.getElementById('controlsSectionAdvanced').classList.add('disabled');
         telemetryHud.classList.add('disabled');
         progressContainer.classList.add('hidden');
         hudVoltage.textContent = '--.- V';
@@ -200,11 +196,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const torque = parseInt(torqueSlider.value);
             const cruise = cruiseToggle.checked ? 1 : 0;
             const ledOn = ledToggle.checked ? 1 : 0;
+            const region = parseInt(document.getElementById('regionSelect').value, 16);
             
-            // Step 1: Region to Global (0x01) to allow high speeds
-            flashStatusText.textContent = 'Setting Custom Region...';
+            // Step 1: Set Region
+            flashStatusText.textContent = `Setting Region (0x0${region})...`;
             progressFill.style.width = '15%';
-            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x01]);
+            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_REGION, [region]);
             await sleep(400);
 
             // Step 2: Speed Limit

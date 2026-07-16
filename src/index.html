@@ -39,7 +39,16 @@
 
         <!-- Tab 2: Tuning -->
         <section id="tab-tuning" class="glass-panel tab-content" style="display: none;">
-            <div class="tuning-controls disabled" id="controlsSectionTuning">
+            <div class="tuning-controls" id="controlsSectionTuning">
+                <div class="control-group">
+                    <div class="control-header"><label>Region</label></div>
+                    <select id="regionSelect" class="neon-select">
+                        <option value="0x00">Custom (Unrestricted)</option>
+                        <option value="0x01">Global (32 km/h)</option>
+                        <option value="0x02" selected>EU (20 km/h)</option>
+                        <option value="0x03">DE (20 km/h ABE)</option>
+                    </select>
+                </div>
                 <div class="control-group">
                     <div class="control-header"><label>Speed Limit</label><span id="speedValue" class="value-display">20 km/h</span></div>
                     <input type="range" id="speedSlider" min="5" max="40" value="20" class="neon-slider">
@@ -61,7 +70,7 @@
 
         <!-- Tab 3: Advanced -->
         <section id="tab-advanced" class="glass-panel tab-content" style="display: none;">
-            <div class="tuning-controls disabled" id="controlsSectionAdvanced">
+            <div class="tuning-controls" id="controlsSectionAdvanced">
                 <div class="toggle-group">
                     <label>Cruise Control</label>
                     <label class="switch"><input type="checkbox" id="cruiseToggle"><span class="slider round"></span></label>
