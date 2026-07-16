@@ -104,19 +104,17 @@ const NaveeBLE = (() => {
         
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
-        console.log("scanAndConnect: Requesting ANY device (bypassing hidden UUID filters)...");
+        console.log("scanAndConnect: Requesting ANY device (bypassing all filters)...");
         let result;
         try {
+            // Force the OS to show every single Bluetooth device nearby
             result = await ble.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: [ST3_UART_SERVICE_UUID]
+                acceptAllDevices: true
             });
         } catch (e) {
-            console.log("scanAndConnect: acceptAllDevices rejected, falling back to name prefix...");
-            result = await ble.requestDevice({
-                namePrefix: 'Navee',
-                optionalServices: [ST3_UART_SERVICE_UUID]
-            });
+            console.log("scanAndConnect: acceptAllDevices rejected, falling back to empty scan...");
+            // Absolute bare-minimum fallback
+            result = await ble.requestDevice({});
         }
         
         console.log("scanAndConnect: Device request resolved: " + JSON.stringify(result));
@@ -175,18 +173,14 @@ const NaveeBLE = (() => {
         await initBle();
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
-        // Scan for ANY device, bypassing hidden UUIDs in advertisement packets
+        // Force the OS to show every single Bluetooth device nearby
         let result;
         try {
             result = await ble.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: [ST3_UART_SERVICE_UUID]
+                acceptAllDevices: true
             });
         } catch (e) {
-            result = await ble.requestDevice({
-                namePrefix: 'Navee',
-                optionalServices: [ST3_UART_SERVICE_UUID]
-            });
+            result = await ble.requestDevice({});
         }
         
         deviceId = result.device ? result.device.deviceId : result.deviceId;
