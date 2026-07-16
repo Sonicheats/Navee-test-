@@ -321,17 +321,16 @@ const NaveeBLE = (() => {
             for (const target of targets) {
                 for (const chunk of chunks) {
                     try {
-                        const buffer = new Uint8Array(chunk);
-                        const dataView = new DataView(buffer.buffer);
+                        // Capacitor's raw BLE plugin requires an array of numbers, not a DataView
                         await ble.write({
                             deviceId,
                             service: ST3_UART_SERVICE_UUID,
                             characteristic: target,
-                            value: dataView 
+                            value: Array.from(chunk) // Pass raw array of bytes
                         });
                     } catch(e) { 
                         // Ignore errors, just keep spamming, but log one so we know it failed
-                        if (i === 0) console.error("Injection failed on loop 0: " + JSON.stringify(e));
+                        if (i === 0) console.error("Injection failed on loop 0 for target " + target + ": " + (e.message || JSON.stringify(e)));
                     }
                 }
             }
