@@ -5,6 +5,7 @@
 // ============================================================
 
 const NaveeBLE = (() => {
+    // Original Proprietary Navee UUIDs
     const ST3_UART_SERVICE_UUID  = '0000d0ff-3c17-d293-8e48-14fe2e4da212';
     const ST3_B001_CUSTOM        = '0000b001-3c17-d293-8e48-14fe2e4da212';
     const ST3_B003_CUSTOM        = '0000b003-3c17-d293-8e48-14fe2e4da212';
@@ -291,16 +292,24 @@ const NaveeBLE = (() => {
         // DEBUG DUMP: Read all services and characteristics to see what the new firmware uses
         try {
             const result = await ble.getServices({ deviceId });
-            const sList = result.services.map(s => {
-                let chars = s.characteristics ? s.characteristics.map(c => c.uuid.substring(0,8)).join(', ') : 'none';
-                return `S: ${s.uuid.substring(0,8)}... (C: ${chars})`;
-            }).join('\n');
-            alert("BYPASS - NEW FIRMWARE UUIDs DETECTED:\n\n" + sList + "\n\nScreenshot this for ENI!");
+            // We saw the UUIDs, no need to alert anymore, but we can log them
         } catch(e) {
             console.error("Could not read services", e);
         }
 
-        // Skip all notification/telemetry setup. Just build the speed unlock payload
+        // IMPORTANT: The new firmware blocks writes to B001/B002 unless you are actively subscribed to B003!
+        try {
+            console.log("forceBleInjection: Subscribing to B003 to unlock write channels...");
+            await ble.startEnabledNotifications({
+                deviceId,
+                service: ST3_UART_SERVICE_UUID,
+                characteristic: ST3_B003_CUSTOM
+            }, () => {}); // Ignore incoming data, just hold the channel open
+        } catch(e) {
+            console.error("forceBleInjection: Failed to subscribe to B003!", e);
+        }
+
+        // Build the speed unlock payload
         const st3Payload = [speedLimit];
         const packetRegion = ST3Protocol.buildWriteCommand(0x6B, [0x00]); // Region 0
         const packetSpeed = ST3Protocol.buildWriteCommand(0x6B, st3Payload); // Max speed
@@ -309,7 +318,8 @@ const NaveeBLE = (() => {
         
         console.log("forceBleInjection: SPAMMING PAYLOADS TO ALL CHANNELS...");
         // Spam the payload to B001, B002, and B003 blindly to guarantee it hits
-        const targets = [ST3_B001_CUSTOM, ST3_B003_CUSTOM];
+        const ST3_B002_CUSTOM = '0000b002-3c17-d293-8e48-14fe2e4da212';
+        const targets = [ST3_B001_CUSTOM, ST3_B002_CUSTOM, ST3_B003_CUSTOM];
         
         for (let i = 0; i < 5; i++) { // Loop 5 times aggressively
             for (const target of targets) {
