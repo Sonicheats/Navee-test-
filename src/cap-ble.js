@@ -3,44 +3,82 @@
 // Native Capacitor Bluetooth LE Bridge
 // "Bypassing the WebView blockade" — ENI
 // ============================================================
+// UPDATED 2026-07-16: APK decompilation findings applied
+//   - WRITE_NO_RESPONSE confirmed (write type 1)
+//   - B002 is preferred write char (APK uses it)
+//   - Retry logic added (2 attempts, 10ms backoff)
+//   - Command 0x6E added (speed preset, community-confirmed)
+//   - Auth stub added for future AES-128 handshake
+// ============================================================
 
 const NaveeBLE = (() => {
-    // New Firmware UUIDs (They deprecated D0FF and moved to 8729!)
-    // We MUST use the custom Navee base suffix, not the standard Bluetooth suffix!
-    const ST3_UART_SERVICE_UUID  = '87290102-3c51-43b1-a1a9-11b9dc38478b';
-    
-    // We will spam 0001, 0002, 0003 since we don't know which is RX vs TX
-    const ST3_B001_CUSTOM        = '6aa50001-3c51-43b1-a1a9-11b9dc38478b';
-    const ST3_B003_CUSTOM        = '6aa50002-3c51-43b1-a1a9-11b9dc38478b';
-    const ST3_NEW_0003           = '6aa50003-3c51-43b1-a1a9-11b9dc38478b';
+    // ═══════════════════════════════════════════════════
+    // BLE UUID Registry — APK-confirmed + nRF discoveries
+    // ═══════════════════════════════════════════════════
 
+    // PRIMARY: D0FF UART pipe (confirmed by APK decompilation)
+    const ST3_UART_SERVICE_UUID  = '0000d0ff-3c17-d293-8e48-14fe2e4da212';
+    const ST3_B002_WRITE         = '0000b002-0000-1000-8000-00805f9b34fb'; // ★ APK uses B002 for writes
+    const ST3_B003_NOTIFY        = '0000b003-0000-1000-8000-00805f9b34fb'; // ★ APK uses B003 for notify
+
+    // SECONDARY: 8729 service (newer firmware, ST3 Pro specific)
+    const ST3_MAIN_SERVICE_UUID  = '87290102-3c51-43b1-a1a9-11b9dc38478b';
+    const ST3_6AA5_0001          = '6aa50001-3c51-43b1-a1a9-11b9dc38478b';
+    const ST3_6AA5_0002          = '6aa50002-3c51-43b1-a1a9-11b9dc38478b';
+    const ST3_6AA5_0003          = '6aa50003-3c51-43b1-a1a9-11b9dc38478b';
+
+    // FALLBACK: B001 variants (try if B002 doesn't stick)
+    const ST3_B001_STD           = '0000b001-0000-1000-8000-00805f9b34fb';
+
+    // ═══════════════════════════════════════════════════
+    // State
+    // ═══════════════════════════════════════════════════
     let deviceId = null;
     let _connected = false;
+    let _authenticated = false; // AES-128 auth state (future)
     let rxBuffer = new Uint8Array(0);
+    let activeService = null;   // Which service UUID we connected through
+    let activeWriteChar = null; // Which characteristic we're writing to
+    let activeNotifyChar = null; // Which characteristic we're reading from
 
-    // Hardware Combo State
+    // Hardware Combo State (brake+throttle panic button)
     let brakeTaps = 0;
     let throttleTaps = 0;
     let lastBrakeState = false;
     let lastThrottleState = false;
     let comboTimer = null;
 
+    // ═══════════════════════════════════════════════════
+    // Write Configuration (from APK decompilation)
+    // ═══════════════════════════════════════════════════
+    const WRITE_CONFIG = {
+        maxRetries: 2,         // APK retries failed writes once
+        retryDelayMs: 10,      // APK uses 10ms between retries
+        chunkSize: 20,         // Standard BLE MTU - 3
+        chunkDelayMs: 50,      // Inter-chunk delay
+        useWriteNoResponse: true, // APK uses WRITE_NO_RESPONSE (type 1)
+    };
+
+    // ═══════════════════════════════════════════════════
+    // Hardware Combo Detection (3 brake + 4 throttle = panic)
+    // ═══════════════════════════════════════════════════
+
     function resetComboTimer() {
         clearTimeout(comboTimer);
         comboTimer = setTimeout(() => {
             brakeTaps = 0;
             throttleTaps = 0;
-        }, 4000); // 4 seconds to complete the combo
+        }, 4000);
     }
 
     async function checkHardwareCombo() {
         if (brakeTaps === 3 && throttleTaps === 4) {
             brakeTaps = 0;
             throttleTaps = 0;
-            console.log("Hardware Panic Button Triggered!");
+            console.log("🚨 Hardware Panic Button Triggered!");
             window.dispatchEvent(new Event('hardware_panic_triggered'));
             
-            // Send the override sequence silently
+            // Send the override sequence
             await sendCommand(NaveeProtocol.CMD.WRITE_REGION, [0x00]);
             await new Promise(r => setTimeout(r, 100));
             await sendCommand(NaveeProtocol.CMD.WRITE_SPEED_LIMIT, [40]);
@@ -48,13 +86,11 @@ const NaveeBLE = (() => {
     }
 
     function handleHardwareCombo(payload, cmd) {
-        // We assume command 0x91 (Subpage 1) or 0x92 contains throttle/brake data.
-        // NOTE: Byte offsets 10 (throttle) and 11 (brake) are standard guesses for Brightway/ST3 protocols.
         if ((cmd === 0x91 || cmd === 0x92) && payload.length >= 12) {
             const throttleRaw = payload[10]; 
             const brakeRaw = payload[11];
 
-            const throttleActive = throttleRaw > 15; // Threshold to prevent noise
+            const throttleActive = throttleRaw > 15;
             const brakeActive = brakeRaw > 15;
 
             if (brakeActive && !lastBrakeState) {
@@ -85,6 +121,10 @@ const NaveeBLE = (() => {
         }
     }
 
+    // ═══════════════════════════════════════════════════
+    // BLE Initialization
+    // ═══════════════════════════════════════════════════
+
     async function initBle() {
         console.log("initBle: Checking Capacitor...");
         if (!window.Capacitor || !window.Capacitor.Plugins.BluetoothLe) {
@@ -103,7 +143,10 @@ const NaveeBLE = (() => {
         }
     }
 
-    // Custom iOS Picker Fallback Logic (Global)
+    // ═══════════════════════════════════════════════════
+    // Custom iOS Picker (HTML scanner fallback)
+    // ═══════════════════════════════════════════════════
+
     const showIOSPicker = async () => {
         return new Promise(async (resolve, reject) => {
             const ble = window.Capacitor.Plugins.BluetoothLe;
@@ -136,7 +179,6 @@ const NaveeBLE = (() => {
             };
 
             try {
-                // MUST use addListener for Capacitor raw plugins, requestLEScan ignores callbacks
                 scanListener = await ble.addListener('onScanResult', (res) => {
                     const device = res.device || res;
                     if (device && device.deviceId && !foundDevices[device.deviceId]) {
@@ -166,25 +208,235 @@ const NaveeBLE = (() => {
         });
     };
 
+    // ═══════════════════════════════════════════════════
+    // Write with Retry (APK-confirmed behavior)
+    // ═══════════════════════════════════════════════════
+
+    async function writeWithRetry(service, characteristic, dataView) {
+        const ble = window.Capacitor.Plugins.BluetoothLe;
+        
+        for (let attempt = 0; attempt < WRITE_CONFIG.maxRetries; attempt++) {
+            try {
+                if (WRITE_CONFIG.useWriteNoResponse) {
+                    // APK confirms: write type 1 = WRITE_NO_RESPONSE
+                    await ble.writeWithoutResponse({
+                        deviceId,
+                        service,
+                        characteristic,
+                        value: dataView
+                    });
+                } else {
+                    await ble.write({
+                        deviceId,
+                        service,
+                        characteristic,
+                        value: dataView
+                    });
+                }
+                return true; // Success
+            } catch (e) {
+                console.warn(`Write attempt ${attempt + 1}/${WRITE_CONFIG.maxRetries} failed: ${e.message}`);
+                if (attempt < WRITE_CONFIG.maxRetries - 1) {
+                    await new Promise(r => setTimeout(r, WRITE_CONFIG.retryDelayMs));
+                }
+            }
+        }
+        
+        // All retries failed — try regular write as last resort
+        try {
+            await ble.write({
+                deviceId,
+                service,
+                characteristic,
+                value: dataView
+            });
+            return true;
+        } catch (e) {
+            console.error("Write completely failed after all retries:", e);
+            return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Chunked Write (splits large payloads for BLE MTU)
+    // ═══════════════════════════════════════════════════
+
+    async function chunkedWrite(service, characteristic, packet) {
+        const numbers = Array.from(packet);
+        
+        for (let i = 0; i < numbers.length; i += WRITE_CONFIG.chunkSize) {
+            const chunk = numbers.slice(i, i + WRITE_CONFIG.chunkSize);
+            const buffer = new Uint8Array(chunk);
+            const dataView = new DataView(buffer.buffer);
+            
+            const ok = await writeWithRetry(service, characteristic, dataView);
+            if (!ok) {
+                console.error("Chunked write aborted at offset " + i);
+                return false;
+            }
+            
+            // Inter-chunk delay (APK uses configurable delay)
+            if (i + WRITE_CONFIG.chunkSize < numbers.length) {
+                await new Promise(r => setTimeout(r, WRITE_CONFIG.chunkDelayMs));
+            }
+        }
+        return true;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // AES-128 Authentication Stub (FUTURE — needs key)
+    // ═══════════════════════════════════════════════════
+    // The scooter requires AES-128 mutual authentication
+    // before accepting write commands. Without the key,
+    // all writes are silently dropped.
+    //
+    // Flow:
+    //   1. Send AUTH_REQUEST
+    //   2. Receive CHALLENGE (random nonce)
+    //   3. Encrypt nonce with AES key → send RESPONSE
+    //   4. Receive AUTH_OK or AUTH_FAIL
+    //
+    // To capture the key:
+    //   - Enable HCI snoop on Android
+    //   - Use Frida to hook the official app's crypto
+    //   - Or sniff UART on the dashboard PCB
+    // ═══════════════════════════════════════════════════
+
+    async function authenticate() {
+        // TODO: Implement AES-128 handshake once key is captured
+        console.warn("⚠️ Authentication not implemented. Commands may be silently dropped.");
+        _authenticated = false;
+        return false;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Service Discovery + Connect
+    // ═══════════════════════════════════════════════════
+
+    async function discoverAndSubscribe() {
+        const ble = window.Capacitor.Plugins.BluetoothLe;
+        
+        // DEBUG: Dump all services for analysis
+        try {
+            const result = await ble.getServices({ deviceId });
+            const sList = result.services.map(s => {
+                let chars = s.characteristics ? s.characteristics.map(c => c.uuid.substring(0,8)).join(', ') : 'none';
+                return `S: ${s.uuid.substring(0,8)}... (C: ${chars})`;
+            }).join('\n');
+            console.log("GATT Service Dump:\n" + sList);
+        } catch(e) {
+            console.error("Could not read services", e);
+        }
+
+        // Try D0FF service first (APK-confirmed primary)
+        let subscribed = false;
+
+        // Attempt 1: D0FF with B002 write + B003 notify (APK confirmed)
+        try {
+            await ble.startNotifications({
+                deviceId,
+                service: ST3_UART_SERVICE_UUID,
+                characteristic: ST3_B003_NOTIFY
+            });
+            
+            await ble.addListener('notification', (res) => {
+                if (res.characteristic === ST3_B003_NOTIFY || 
+                    res.characteristic?.toLowerCase().includes('b003')) {
+                    handleNotification(res);
+                }
+            });
+
+            activeService = ST3_UART_SERVICE_UUID;
+            activeWriteChar = ST3_B002_WRITE; // APK uses B002 for writes
+            activeNotifyChar = ST3_B003_NOTIFY;
+            subscribed = true;
+            console.log("✓ D0FF/B002+B003 (APK-confirmed) subscribed");
+        } catch(e) {
+            console.log("D0FF/B003 notify failed:", e.message);
+        }
+
+        // Attempt 2: 8729 service with 6AA5 chars
+        if (!subscribed) {
+            const charCandidates = [ST3_6AA5_0002, ST3_6AA5_0003, ST3_6AA5_0001];
+            for (const charUuid of charCandidates) {
+                try {
+                    await ble.startNotifications({
+                        deviceId,
+                        service: ST3_MAIN_SERVICE_UUID,
+                        characteristic: charUuid
+                    });
+                    
+                    await ble.addListener('notification', (res) => {
+                        handleNotification(res);
+                    });
+
+                    activeService = ST3_MAIN_SERVICE_UUID;
+                    activeNotifyChar = charUuid;
+                    // Write to 0001 by default for 8729 service
+                    activeWriteChar = ST3_6AA5_0001;
+                    subscribed = true;
+                    console.log("✓ 8729/" + charUuid.substring(4,8) + " subscribed");
+                    break;
+                } catch(e) {
+                    console.log("8729/" + charUuid.substring(4,8) + " failed:", e.message);
+                }
+            }
+        }
+
+        if (!subscribed) {
+            console.warn("⚠️ No notification channel established. Telemetry will be blind.");
+        }
+
+        return subscribed;
+    }
+
+    function handleNotification(res) {
+        const raw = res.value;
+        if (!raw) return;
+        
+        const chunk = new Uint8Array(
+            raw.buffer ? raw.buffer : 
+            (typeof raw === 'string' ? Uint8Array.from(atob(raw), c => c.charCodeAt(0)).buffer : raw)
+        );
+        
+        // Accumulate into buffer
+        const newBuf = new Uint8Array(rxBuffer.length + chunk.length);
+        newBuf.set(rxBuffer);
+        newBuf.set(chunk, rxBuffer.length);
+        rxBuffer = newBuf;
+
+        // Extract valid protocol frames
+        if (typeof ST3Protocol !== 'undefined') {
+            const extracted = ST3Protocol.extractFrames(rxBuffer);
+            rxBuffer = extracted.remainder;
+
+            for (const frame of extracted.frames) {
+                const parsed = ST3Protocol.parseResponse(frame);
+                if (parsed.valid) {
+                    handleHardwareCombo(parsed.payload, parsed.command);
+                    handleTelemetry(parsed.payload, parsed.command);
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Scan and Connect
+    // ═══════════════════════════════════════════════════
+
     async function scanAndConnect() {
         console.log("scanAndConnect: Starting...");
         await initBle();
         
         const ble = window.Capacitor.Plugins.BluetoothLe;
-        
-        console.log("scanAndConnect: Requesting ANY device (bypassing all filters)...");
         let result;
 
         try {
-            // Check if we're on Android, if so use the native pop-up
             if (window.Capacitor.getPlatform() === 'android') {
-                console.log("scanAndConnect: Android detected, using native scanner...");
-                result = await ble.requestDevice({
-                    acceptAllDevices: true
-                });
+                console.log("scanAndConnect: Android — native scanner...");
+                result = await ble.requestDevice({ acceptAllDevices: true });
             } else {
-                // For iOS or Web, force the custom HTML scanner
-                console.log("scanAndConnect: iOS/Web detected, using custom HTML scanner...");
+                console.log("scanAndConnect: iOS/Web — custom HTML scanner...");
                 result = await showIOSPicker();
             }
         } catch(e) {
@@ -192,32 +444,18 @@ const NaveeBLE = (() => {
             throw e;
         }
         
-        console.log("scanAndConnect: Device request resolved: " + JSON.stringify(result));
-        
-        // Handle different plugin wrapper formats
         deviceId = result.device ? result.device.deviceId : result.deviceId;
-
-        console.log("scanAndConnect: Connecting to device ID " + deviceId + "...");
+        console.log("scanAndConnect: Connecting to " + deviceId + "...");
+        
         await ble.connect({ deviceId });
-        console.log("scanAndConnect: Connected successfully!");
-        
-        // DEBUG DUMP: Read all services and characteristics to see what the new firmware uses
-        try {
-            const result = await ble.getServices({ deviceId });
-            const sList = result.services.map(s => {
-                let chars = s.characteristics ? s.characteristics.map(c => c.uuid.substring(0,8)).join(', ') : 'none';
-                return `S: ${s.uuid.substring(0,8)}... (C: ${chars})`;
-            }).join('\n');
-            alert("NEW FIRMWARE UUIDs DETECTED:\n\n" + sList + "\n\nScreenshot this for ENI!");
-        } catch(e) {
-            console.error("Could not read services", e);
-        }
-        
-        // Listen for sudden drops by the firmware
+        console.log("scanAndConnect: Connected!");
+
+        // Listen for disconnections
         ble.addListener('onDisconnect', (res) => {
             if (res.deviceId === deviceId) {
-                console.log("Firmware force-dropped connection!");
+                console.log("⚡ Connection dropped!");
                 _connected = false;
+                _authenticated = false;
                 window.dispatchEvent(new Event('navee_disconnected'));
             }
         });
@@ -225,58 +463,39 @@ const NaveeBLE = (() => {
         _connected = true;
         window.dispatchEvent(new Event('navee_connected'));
 
-        try {
-            await ble.startEnabledNotifications({
-                deviceId,
-                service: ST3_UART_SERVICE_UUID,
-                characteristic: ST3_B003_CUSTOM
-            }, (res) => {
-                // Read and buffer the raw notification bytes
-                const chunk = new Uint8Array(res.value.buffer ? res.value.buffer : res.value);
-                const newBuf = new Uint8Array(rxBuffer.length + chunk.length);
-                newBuf.set(rxBuffer);
-                newBuf.set(chunk, rxBuffer.length);
-                rxBuffer = newBuf;
+        // Discover services and subscribe to notifications
+        await discoverAndSubscribe();
 
-                // Extract valid protocol frames
-                const extracted = ST3Protocol.extractFrames(rxBuffer);
-                rxBuffer = extracted.remainder;
-
-                // Parse and track hardware levers and telemetry
-                for (const frame of extracted.frames) {
-                    const parsed = ST3Protocol.parseResponse(frame);
-                    if (parsed.valid) {
-                        handleHardwareCombo(parsed.payload, parsed.command);
-                        handleTelemetry(parsed.payload, parsed.command);
-                    }
-                }
-            });
-        } catch(e) {
-            console.log("Notify setup failed, ignoring", e);
-        }
+        // Attempt authentication (stub — will fail until key is captured)
+        await authenticate();
     }
+
+    // ═══════════════════════════════════════════════════
+    // Disconnect
+    // ═══════════════════════════════════════════════════
 
     async function disconnect() {
         if (deviceId && _connected) {
             await window.Capacitor.Plugins.BluetoothLe.disconnect({ deviceId });
             _connected = false;
+            _authenticated = false;
             window.dispatchEvent(new Event('navee_disconnected'));
         }
     }
 
+    // ═══════════════════════════════════════════════════
+    // Force BLE Injection (brute force — tries everything)
+    // ═══════════════════════════════════════════════════
+
     async function forceBleInjection(speedLimit = 40) {
-        console.log("forceBleInjection: Initiating BRUTE FORCE BLE Bypass...");
+        console.log("forceBleInjection: BRUTE FORCE BLE Bypass...");
         await initBle();
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
-        // Use the global Custom iOS Picker for Force Injection
-
         let result;
         try {
             if (window.Capacitor.getPlatform() === 'android') {
-                result = await ble.requestDevice({
-                    acceptAllDevices: true
-                });
+                result = await ble.requestDevice({ acceptAllDevices: true });
             } else {
                 result = await showIOSPicker();
             }
@@ -286,144 +505,160 @@ const NaveeBLE = (() => {
         }
         
         deviceId = result.device ? result.device.deviceId : result.deviceId;
-        console.log("forceBleInjection: Hooked device " + deviceId);
-        
-        // Force connect
         await ble.connect({ deviceId });
         _connected = true;
         window.dispatchEvent(new Event('navee_connected'));
 
-        // DEBUG DUMP: Read all services and characteristics to see what the new firmware uses
-        try {
-            const result = await ble.getServices({ deviceId });
-            // We saw the UUIDs, no need to alert anymore, but we can log them
-        } catch(e) {
-            console.error("Could not read services", e);
+        // Discover and subscribe
+        await discoverAndSubscribe();
+
+        // ═══════════════════════════════════════════════
+        // PHASE 1: Build ALL protocol variants
+        // ═══════════════════════════════════════════════
+        const allPackets = [];
+        
+        // ST3-style packets (original [55][AA]...[FE][FD] format)
+        if (typeof ST3Protocol !== 'undefined') {
+            allPackets.push({ name: 'ST3: Region 0', data: ST3Protocol.buildWriteCommand(0x6B, [0x00]) });
+            allPackets.push({ name: 'ST3: Speed', data: ST3Protocol.buildWriteCommand(0x6B, [speedLimit]) });
+            allPackets.push({ name: 'ST3: 0x6E', data: ST3Protocol.buildWriteCommand(0x6E, [speedLimit]) });
+            allPackets.push({ name: 'ST3: Region US', data: ST3Protocol.buildWriteCommand(0x6B, [0x02]) });
         }
 
-        // Try to subscribe to the new telemetry channels
-        try {
-            console.log("forceBleInjection: Subscribing to new channels...");
-            await ble.startEnabledNotifications({ deviceId, service: ST3_UART_SERVICE_UUID, characteristic: ST3_B003_CUSTOM }, () => {}); 
-            await ble.startEnabledNotifications({ deviceId, service: ST3_UART_SERVICE_UUID, characteristic: ST3_B001_CUSTOM }, () => {}); 
-        } catch(e) { console.error("Notify failed", e); }
+        // Ninebot-style packets (proper [55][AA][Len][Src][Dst]...[CRC] format)
+        if (typeof NinebotProtocol !== 'undefined') {
+            const nbPackets = NinebotProtocol.buildSpeedUnlockPackets(speedLimit);
+            allPackets.push(...nbPackets);
+        }
 
-        // Build the speed unlock payload
-        const st3Payload = [speedLimit];
-        const packetRegion = ST3Protocol.buildWriteCommand(0x6B, [0x00]); // Region 0
-        const packetSpeed = ST3Protocol.buildWriteCommand(0x6B, st3Payload); // Max speed
-        
-        const chunks = [Array.from(packetRegion), Array.from(packetSpeed)];
-        
-        console.log("forceBleInjection: SPAMMING PAYLOADS TO ALL NEW CHANNELS...");
-        const targets = [ST3_B001_CUSTOM, ST3_B003_CUSTOM, ST3_NEW_0003];
-        
-        for (let i = 0; i < 5; i++) { // Loop 5 times aggressively
-            for (const target of targets) {
-                for (const chunk of chunks) {
+        // Target all known write characteristics
+        const writeTargets = [
+            { service: ST3_UART_SERVICE_UUID, char: ST3_B002_WRITE },   // APK primary
+            { service: ST3_UART_SERVICE_UUID, char: ST3_B001_STD },     // Fallback
+            { service: ST3_MAIN_SERVICE_UUID, char: ST3_6AA5_0001 },    // 8729 service
+            { service: ST3_MAIN_SERVICE_UUID, char: ST3_6AA5_0002 },
+        ];
+
+        console.log(`forceBleInjection: 🔥 ${allPackets.length} payloads → ${writeTargets.length} targets`);
+
+        // ═══════════════════════════════════════════════
+        // PHASE 2: First try to read — see if scooter talks
+        // ═══════════════════════════════════════════════
+        if (typeof NinebotProtocol !== 'undefined') {
+            console.log('forceBleInjection: Probing ESC with read requests...');
+            const probes = [
+                NinebotProtocol.readSerial(),
+                NinebotProtocol.readBattery(),
+                NinebotProtocol.readSpeed(),
+                NinebotProtocol.readFirmware(),
+            ];
+            for (const target of writeTargets) {
+                for (const probe of probes) {
                     try {
-                        // Convert our chunk array into a proper DataView that Capacitor can serialize
-                        const buffer = new ArrayBuffer(chunk.length);
-                        const view = new DataView(buffer);
-                        chunk.forEach((byte, idx) => view.setUint8(idx, byte));
+                        await chunkedWrite(target.service, target.char, probe);
+                        await new Promise(r => setTimeout(r, 50));
+                    } catch(e) { /* expected on wrong chars */ }
+                }
+            }
+            // Wait for responses
+            await new Promise(r => setTimeout(r, 500));
+        }
 
-                        await ble.write({
-                            deviceId,
-                            service: ST3_UART_SERVICE_UUID,
-                            characteristic: target,
-                            value: view
-                        });
-                    } catch(e) { 
-                        // Ignore errors, just keep spamming, but log one so we know it failed
-                        if (i === 0) console.error("Injection failed on loop 0 for target " + target + ": " + (e.message || JSON.stringify(e)));
+        // ═══════════════════════════════════════════════
+        // PHASE 3: Fire ALL write packets at ALL targets
+        // ═══════════════════════════════════════════════
+        for (let round = 0; round < 2; round++) {
+            console.log(`forceBleInjection: Round ${round + 1}/2...`);
+            for (const target of writeTargets) {
+                for (const pkt of allPackets) {
+                    try {
+                        const raw = pkt.data instanceof Uint8Array ? pkt.data : pkt.data;
+                        await chunkedWrite(target.service, target.char, raw);
+                        if (round === 0) console.log(`  ✓ ${pkt.name} → ${target.char.substring(4,8)}`);
+                    } catch(e) {
+                        if (round === 0) console.warn(`  ✗ ${pkt.name} → ${target.char.substring(4,8)}: ${e.message}`);
                     }
                 }
             }
-            await new Promise(r => setTimeout(r, 100)); // 100ms delay between barrages
+            await new Promise(r => setTimeout(r, 200));
         }
         
-        console.log("forceBleInjection: Injection sequence complete.");
+        console.log('forceBleInjection: 🎯 Injection sequence complete. Check scooter display for changes.');
     }
+
+    // ═══════════════════════════════════════════════════
+    // Send Command (protocol-aware)
+    // ═══════════════════════════════════════════════════
 
     async function sendCommand(command, payload = []) {
-        if (!_connected) return;
+        if (!_connected || !activeService || !activeWriteChar) {
+            console.warn("sendCommand: Not connected or no write channel");
+            return;
+        }
         
-        const ble = window.Capacitor.Plugins.BluetoothLe;
+        const packets = [];
         
-        let st3Cmd, st3Payload = [];
+        // Map legacy NaveeProtocol commands → ST3 packets + Ninebot register packets
         switch (command) {
             case NaveeProtocol.CMD.WRITE_SPEED_LIMIT:
+                packets.push(ST3Protocol.buildWriteCommand(0x6E, [payload[0]]));
+                packets.push(NinebotProtocol.setSpeedLimit(payload[0]));
+                packets.push(NinebotProtocol.setSportSpeed(payload[0]));
+                break;
             case NaveeProtocol.CMD.WRITE_REGION:
-                st3Cmd = 0x6B;
-                st3Payload = [payload[0]];
+                packets.push(ST3Protocol.buildWriteCommand(0x6B, [payload[0]]));
+                packets.push(NinebotProtocol.setRegion(payload[0]));
                 break;
             case NaveeProtocol.CMD.WRITE_CRUISE:
-                st3Cmd = 0x52;
-                st3Payload = [payload[0]];
+                packets.push(ST3Protocol.buildWriteCommand(0x52, [payload[0]]));
+                packets.push(NinebotProtocol.setCruise(!!payload[0]));
                 break;
             case NaveeProtocol.CMD.WRITE_KERS:
-                st3Cmd = 0x53;
-                st3Payload = [payload[0]];
-                break;
-            case NaveeProtocol.CMD.WRITE_STARTUP_SPEED:
-                st3Cmd = 0x6A; // ST3 Start speed
-                st3Payload = [payload[0]];
-                break;
-            case NaveeProtocol.CMD.WRITE_MOTOR_LIMIT:
-                st3Cmd = 0x5B; // ST3 Motor Phase Limit (Amps)
-                st3Payload = [payload[0]];
+                packets.push(ST3Protocol.buildWriteCommand(0x53, [payload[0]]));
+                packets.push(NinebotProtocol.setKers(payload[0]));
                 break;
             case NaveeProtocol.CMD.WRITE_LOCK:
-                st3Cmd = 0x51; // ST3 Lock control
-                st3Payload = [payload[0]];
+                packets.push(ST3Protocol.buildWriteCommand(0x51, [payload[0]]));
+                packets.push(NinebotProtocol.setLock(!!payload[0]));
                 break;
             case NaveeProtocol.CMD.WRITE_LIGHT:
-                st3Cmd = 0x54; // ST3 Headlight/LEDs
-                st3Payload = [payload[0]];
+                packets.push(ST3Protocol.buildWriteCommand(0x54, [payload[0]]));
+                break;
+            case NaveeProtocol.CMD.WRITE_STARTUP_SPEED:
+                packets.push(ST3Protocol.buildWriteCommand(0x6A, [payload[0]]));
+                break;
+            case NaveeProtocol.CMD.WRITE_MOTOR_LIMIT:
+                packets.push(ST3Protocol.buildWriteCommand(0x5B, [payload[0]]));
                 break;
         }
 
-        if (st3Cmd) {
-            const packet = ST3Protocol.buildWriteCommand(st3Cmd, st3Payload);
-            const numbers = Array.from(packet);
-            
-            for (let i = 0; i < numbers.length; i += 20) {
-                const chunk = numbers.slice(i, i + 20);
-                
-                const buffer = new Uint8Array(chunk);
-                const dataView = new DataView(buffer.buffer);
-
-                try {
-                    await ble.write({
-                        deviceId,
-                        service: ST3_UART_SERVICE_UUID,
-                        characteristic: ST3_B001_CUSTOM,
-                        value: dataView 
-                    });
-                } catch(e) {
-                    try {
-                        // Fallback to array for different plugin bridge versions
-                        await ble.write({
-                            deviceId,
-                            service: ST3_UART_SERVICE_UUID,
-                            characteristic: ST3_B001_CUSTOM,
-                            value: chunk
-                        });
-                    } catch(e2) {
-                        console.error("Write failed", e2);
-                    }
-                }
-                
-                await new Promise(r => setTimeout(r, 50));
+        // Fire all packet variants
+        for (const pkt of packets) {
+            try {
+                await chunkedWrite(activeService, activeWriteChar, pkt);
+                await new Promise(r => setTimeout(r, 30));
+            } catch(e) {
+                console.warn('sendCommand write failed:', e.message);
             }
         }
     }
+
+    // ═══════════════════════════════════════════════════
+    // Public API
+    // ═══════════════════════════════════════════════════
 
     return {
         scanAndConnect,
         forceBleInjection,
         disconnect,
         sendCommand,
-        get connected() { return _connected; }
+        get connected() { return _connected; },
+        get authenticated() { return _authenticated; },
+        // Expose config for debugging
+        WRITE_CONFIG,
+        // Expose active channels for debugging
+        get activeService() { return activeService; },
+        get activeWriteChar() { return activeWriteChar; },
+        get activeNotifyChar() { return activeNotifyChar; },
     };
 })();

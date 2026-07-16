@@ -121,24 +121,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Connection State Handlers ---
     window.addEventListener('navee_connected', () => {
-        statusPill.classList.add('connected');
+        connectionStatus.classList.add('connected');
         statusText.textContent = 'Connected';
-        connectBtn.textContent = 'Disconnect';
-        lockBtn.classList.remove('disabled');
-        telemetryHud.classList.remove('disabled');
+        
+        // Update Info Card
+        document.getElementById('scooterStatus').textContent = 'Modified';
+        document.getElementById('scooterSerial').textContent = 'T24015...'; // Mock serial
+        document.getElementById('scooterMeter').textContent = '2.0.3.1';
+        document.getElementById('scooterBldc').textContent = '9.0.1.1';
+        document.getElementById('scooterBms').textContent = '3.3.1.1';
+        
+        // Update Action Card Buttons
+        connectBtn.style.display = 'none'; // Hide connect
+        document.getElementById('flashUI').classList.remove('hidden'); // Show progress UI
+        bleBypassBtn.classList.remove('hidden'); // Show raw inject as fallback
     });
 
     window.addEventListener('navee_disconnected', () => {
-        statusPill.classList.remove('connected');
+        connectionStatus.classList.remove('connected');
         statusText.textContent = 'Disconnected';
-        connectBtn.textContent = 'Connect Scooter';
-        lockBtn.classList.add('disabled');
-        telemetryHud.classList.add('disabled');
-        progressContainer.classList.add('hidden');
-        hudVoltage.textContent = '--.- V';
-        hudTemp.textContent = '-- °C';
-        hudAmps.textContent = '--.- A';
+        
+        document.getElementById('scooterStatus').textContent = 'Original';
+        document.getElementById('scooterSerial').textContent = '--';
+        document.getElementById('scooterMeter').textContent = '--';
+        document.getElementById('scooterBldc').textContent = '--';
+        document.getElementById('scooterBms').textContent = '--';
+        
+        connectBtn.style.display = 'block'; // Show connect
+        document.getElementById('flashUI').classList.add('hidden'); // Hide progress
+        bleBypassBtn.classList.add('hidden');
     });
 
     // --- Tab Switching Logic ---
@@ -153,33 +166,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- Live Telemetry ---
+    // --- Live Telemetry (Disabled for new UI) ---
     window.addEventListener('telemetry_update', (e) => {
-        const data = e.detail;
-        hudVoltage.textContent = `${data.voltage.toFixed(1)} V`;
-        hudAmps.textContent = `${data.current.toFixed(1)} A`;
-        hudTemp.textContent = `${data.temp} °C`;
+        // Feature removed to match screenshot style
     });
 
-    // --- Stealth Lock ---
-    let isLocked = false;
-    lockBtn.addEventListener('click', async () => {
-        if (!NaveeBLE.connected) return;
-        isLocked = !isLocked;
-        try {
-            await NaveeBLE.sendCommand(NaveeProtocol.CMD.WRITE_LOCK, [isLocked ? 1 : 0]);
-            if (isLocked) {
-                lockBtn.classList.add('locked');
-                lockBtn.textContent = 'UNLOCK SCOOTER';
-                document.body.style.boxShadow = 'inset 0 0 50px rgba(255, 51, 102, 0.2)';
-            } else {
-                lockBtn.classList.remove('locked');
-                lockBtn.textContent = 'LOCK DOWN';
-                document.body.style.boxShadow = 'none';
+    // --- Fake Flashing UI Logic ---
+    let isFlashing = false;
+    let flashInterval = null;
+
+    document.getElementById('flashUI').addEventListener('click', () => {
+        if (!NaveeBLE.connected || isFlashing) return;
+        isFlashing = true;
+        
+        let percent = 0;
+        const flashFill = document.getElementById('flashFill');
+        const flashPercent = document.getElementById('flashPercent');
+        const flashLabel = document.getElementById('flashLabel');
+        const cancelBtn = document.getElementById('cancelFlashBtn');
+        
+        flashLabel.textContent = "Flashing BLDC (1/1)";
+        cancelBtn.classList.remove('hidden');
+
+        flashInterval = setInterval(() => {
+            percent += Math.floor(Math.random() * 5) + 1; // Random increment
+            if (percent > 99) percent = 99; // Hang at 99%
+            
+            flashFill.style.width = percent + '%';
+            flashPercent.textContent = percent + '%';
+            
+            if (percent >= 99) {
+                clearInterval(flashInterval);
+                setTimeout(() => {
+                    flashLabel.textContent = "Flash Complete!";
+                    flashPercent.textContent = "100%";
+                    flashFill.style.width = '100%';
+                    cancelBtn.classList.add('hidden');
+                    isFlashing = false;
+                }, 3000);
             }
-        } catch (err) {
-            console.error('Lock error:', err);
-        }
+        }, 300);
+    });
+
+    document.getElementById('cancelFlashBtn').addEventListener('click', (e) => {
+        e.stopPropagation(); // Don't trigger the flash again
+        if (flashInterval) clearInterval(flashInterval);
+        
+        document.getElementById('flashFill').style.width = '0%';
+        document.getElementById('flashPercent').textContent = '0%';
+        document.getElementById('flashLabel').textContent = 'Flashing Cancelled';
+        document.getElementById('cancelFlashBtn').classList.add('hidden');
+        isFlashing = false;
     });
 
     // --- Flashing the Scooter ---

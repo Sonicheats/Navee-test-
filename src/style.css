@@ -430,6 +430,122 @@ input:checked+.slider.round:before {
     display: flex;
 }
 
+/* Info Card (from Screenshot) */
+.info-card {
+    background: #1a1a1c;
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.info-row:last-child {
+    margin-bottom: 0;
+}
+
+.info-label {
+    color: #888;
+    text-transform: uppercase;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.info-value {
+    color: #fff;
+}
+
+.status-modified {
+    color: #00ff66; /* Green like screenshot */
+}
+
+/* Action Card (from Screenshot) */
+.action-card {
+    background: #1a1a1c;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+}
+
+.btn-blue {
+    background: #2a75ff;
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: none;
+    box-shadow: none;
+}
+
+.btn-blue:hover {
+    background: #3a85ff;
+}
+
+.btn-red {
+    background: #ff3b30;
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: none;
+    box-shadow: none;
+}
+
+.btn-red:hover {
+    background: #ff4b40;
+}
+
+/* Flash Progress UI */
+.progress-section {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.progress-label {
+    color: #888;
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+.progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: #333;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 15px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: #2a75ff;
+    transition: width 0.3s ease;
+}
+
+.progress-percentage {
+    color: #2a75ff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+}
+
 .bottom-tab-bar {
     position: fixed;
     bottom: 0;

@@ -21,18 +21,39 @@
         </header>
 
         <!-- Tab 1: Dashboard -->
-        <section id="tab-dashboard" class="glass-panel tab-content active">
-            <div id="telemetryHud" class="hud-container disabled">
-                <div class="hud-item"><span class="hud-label">VOLTAGE</span><span id="hudVoltage" class="hud-value">--.- V</span></div>
-                <div class="hud-item"><span class="hud-label">TEMP</span><span id="hudTemp" class="hud-value">-- °C</span></div>
-                <div class="hud-item"><span class="hud-label">CURRENT</span><span id="hudAmps" class="hud-value">--.- A</span></div>
+        <section id="tab-dashboard" class="tab-content active" style="padding: 0; background: transparent; border: none; box-shadow: none; backdrop-filter: none;">
+            
+            <!-- Scooter Info Card -->
+            <div class="info-card">
+                <div class="info-row"><span class="info-label">STATUS</span><span class="info-value status-modified" id="scooterStatus">Original</span></div>
+                <div class="info-row"><span class="info-label">SERIAL</span><span class="info-value" id="scooterSerial">--</span></div>
+                <div class="info-row"><span class="info-label">METER</span><span class="info-value" id="scooterMeter">--</span></div>
+                <div class="info-row"><span class="info-label">BLDC</span><span class="info-value" id="scooterBldc">--</span></div>
+                <div class="info-row"><span class="info-label">BMS</span><span class="info-value" id="scooterBms">--</span></div>
             </div>
-            <button id="connectBtn" class="btn outline connect-btn">Connect Scooter</button>
-            <button id="bleBypassBtn" class="btn warning bypass-btn" style="margin-top: 10px;">Raw BLE Injection (Bypass Sync)</button>
-            <button id="lockBtn" class="btn danger lock-btn disabled" style="margin-top: 15px;">LOCK DOWN</button>
+
+            <!-- Action Card -->
+            <div class="action-card" id="actionCard">
+                <div class="card-header">
+                    <span class="icon">⚙️</span> Flash Firmware
+                </div>
+                
+                <button id="connectBtn" class="btn btn-blue" style="margin-bottom: 15px;">Connect Scooter</button>
+                
+                <div class="progress-section hidden" id="flashUI">
+                    <div class="progress-label" id="flashLabel">Flashing BLDC (1/1)</div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="flashFill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-percentage" id="flashPercent">0%</div>
+                    <button id="cancelFlashBtn" class="btn btn-red" style="margin-top: 20px;">Cancel</button>
+                </div>
+                
+                <button id="bleBypassBtn" class="btn btn-blue hidden" style="margin-top: 15px;">Inject Speed Unlock</button>
+            </div>
             
             <!-- Debug Console -->
-            <section id="debugConsole" style="background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; margin-top: 20px; height: 150px; overflow-y: auto; border: 1px solid #0f0; border-radius: 8px;">
+            <section id="debugConsole" style="background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; margin-top: 20px; height: 100px; overflow-y: auto; border: 1px solid #0f0; border-radius: 8px;">
                 <div>--- SYSTEM LOG ---</div>
             </section>
         </section>
