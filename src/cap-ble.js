@@ -171,10 +171,19 @@ const NaveeBLE = (() => {
         let result;
 
         try {
-            // Force our custom HTML scanner to avoid native UI bugs and cancellation glitches
-            result = await showIOSPicker();
+            // Check if we're on Android, if so use the native pop-up
+            if (window.Capacitor.getPlatform() === 'android') {
+                console.log("scanAndConnect: Android detected, using native scanner...");
+                result = await ble.requestDevice({
+                    acceptAllDevices: true
+                });
+            } else {
+                // For iOS or Web, force the custom HTML scanner
+                console.log("scanAndConnect: iOS/Web detected, using custom HTML scanner...");
+                result = await showIOSPicker();
+            }
         } catch(e) {
-            console.error("Custom Picker failed:", e);
+            console.error("Scanner failed:", e);
             throw e;
         }
         
@@ -238,9 +247,15 @@ const NaveeBLE = (() => {
 
         let result;
         try {
-            result = await showIOSPicker();
+            if (window.Capacitor.getPlatform() === 'android') {
+                result = await ble.requestDevice({
+                    acceptAllDevices: true
+                });
+            } else {
+                result = await showIOSPicker();
+            }
         } catch(e) {
-            console.error("Custom Picker failed:", e);
+            console.error("Scanner failed:", e);
             throw e;
         }
         
