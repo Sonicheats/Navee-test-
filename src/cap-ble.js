@@ -2,13 +2,13 @@
 // NaveeHack — cap-ble.js
 // Native Capacitor Bluetooth LE Bridge
 // "Bypassing the WebView blockade" — ENI
-// ============================================================
-
-const NaveeBLE = (() => {
-    // Original Proprietary Navee UUIDs
-    const ST3_UART_SERVICE_UUID  = '0000d0ff-3c17-d293-8e48-14fe2e4da212';
-    const ST3_B001_CUSTOM        = '0000b001-3c17-d293-8e48-14fe2e4da212';
-    const ST3_B003_CUSTOM        = '0000b003-3c17-d293-8e48-14fe2e4da212';
+    // New Firmware UUIDs (They deprecated D0FF and moved to 8729!)
+    const ST3_UART_SERVICE_UUID  = '87290102-0000-1000-8000-00805f9b34fb';
+    
+    // We will spam 0001, 0002, 0003 since we don't know which is RX vs TX
+    const ST3_B001_CUSTOM        = '6aa50001-0000-1000-8000-00805f9b34fb';
+    const ST3_B003_CUSTOM        = '6aa50002-0000-1000-8000-00805f9b34fb';
+    const ST3_NEW_0003           = '6aa50003-0000-1000-8000-00805f9b34fb';
 
     let deviceId = null;
     let _connected = false;
@@ -297,17 +297,12 @@ const NaveeBLE = (() => {
             console.error("Could not read services", e);
         }
 
-        // IMPORTANT: The new firmware blocks writes to B001/B002 unless you are actively subscribed to B003!
+        // Try to subscribe to the new telemetry channels
         try {
-            console.log("forceBleInjection: Subscribing to B003 to unlock write channels...");
-            await ble.startEnabledNotifications({
-                deviceId,
-                service: ST3_UART_SERVICE_UUID,
-                characteristic: ST3_B003_CUSTOM
-            }, () => {}); // Ignore incoming data, just hold the channel open
-        } catch(e) {
-            console.error("forceBleInjection: Failed to subscribe to B003!", e);
-        }
+            console.log("forceBleInjection: Subscribing to new channels...");
+            await ble.startEnabledNotifications({ deviceId, service: ST3_UART_SERVICE_UUID, characteristic: ST3_B003_CUSTOM }, () => {}); 
+            await ble.startEnabledNotifications({ deviceId, service: ST3_UART_SERVICE_UUID, characteristic: ST3_B001_CUSTOM }, () => {}); 
+        } catch(e) { console.error("Notify failed", e); }
 
         // Build the speed unlock payload
         const st3Payload = [speedLimit];
@@ -316,10 +311,8 @@ const NaveeBLE = (() => {
         
         const chunks = [Array.from(packetRegion), Array.from(packetSpeed)];
         
-        console.log("forceBleInjection: SPAMMING PAYLOADS TO ALL CHANNELS...");
-        // Spam the payload to B001, B002, and B003 blindly to guarantee it hits
-        const ST3_B002_CUSTOM = '0000b002-3c17-d293-8e48-14fe2e4da212';
-        const targets = [ST3_B001_CUSTOM, ST3_B002_CUSTOM, ST3_B003_CUSTOM];
+        console.log("forceBleInjection: SPAMMING PAYLOADS TO ALL NEW CHANNELS...");
+        const targets = [ST3_B001_CUSTOM, ST3_B003_CUSTOM, ST3_NEW_0003];
         
         for (let i = 0; i < 5; i++) { // Loop 5 times aggressively
             for (const target of targets) {
