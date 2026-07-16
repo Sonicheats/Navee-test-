@@ -233,9 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 applyBtn.classList.remove('disabled');
                 progressFill.style.backgroundColor = 'var(--accent)';
-            setTimeout(() => {
-                applyBtn.classList.remove('disabled');
-                progressFill.style.backgroundColor = 'var(--accent)';
                 progressFill.style.width = '0%';
                 progressContainer.classList.add('hidden');
             }, 3000);
