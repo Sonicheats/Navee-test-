@@ -6,12 +6,13 @@
 
 const NaveeBLE = (() => {
     // New Firmware UUIDs (They deprecated D0FF and moved to 8729!)
-    const ST3_UART_SERVICE_UUID  = '87290102-0000-1000-8000-00805f9b34fb';
+    // We MUST use the custom Navee base suffix, not the standard Bluetooth suffix!
+    const ST3_UART_SERVICE_UUID  = '87290102-3c51-43b1-a1a9-11b9dc38478b';
     
     // We will spam 0001, 0002, 0003 since we don't know which is RX vs TX
-    const ST3_B001_CUSTOM        = '6aa50001-0000-1000-8000-00805f9b34fb';
-    const ST3_B003_CUSTOM        = '6aa50002-0000-1000-8000-00805f9b34fb';
-    const ST3_NEW_0003           = '6aa50003-0000-1000-8000-00805f9b34fb';
+    const ST3_B001_CUSTOM        = '6aa50001-3c51-43b1-a1a9-11b9dc38478b';
+    const ST3_B003_CUSTOM        = '6aa50002-3c51-43b1-a1a9-11b9dc38478b';
+    const ST3_NEW_0003           = '6aa50003-3c51-43b1-a1a9-11b9dc38478b';
 
     let deviceId = null;
     let _connected = false;
@@ -321,12 +322,16 @@ const NaveeBLE = (() => {
             for (const target of targets) {
                 for (const chunk of chunks) {
                     try {
-                        // Capacitor's raw BLE plugin requires an array of numbers, not a DataView
+                        // Convert our chunk array into a proper DataView that Capacitor can serialize
+                        const buffer = new ArrayBuffer(chunk.length);
+                        const view = new DataView(buffer);
+                        chunk.forEach((byte, idx) => view.setUint8(idx, byte));
+
                         await ble.write({
                             deviceId,
                             service: ST3_UART_SERVICE_UUID,
                             characteristic: target,
-                            value: Array.from(chunk) // Pass raw array of bytes
+                            value: view
                         });
                     } catch(e) { 
                         // Ignore errors, just keep spamming, but log one so we know it failed
