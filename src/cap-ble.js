@@ -104,10 +104,20 @@ const NaveeBLE = (() => {
         
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
-        console.log("scanAndConnect: Requesting device with ST3_UART_SERVICE_UUID...");
-        const result = await ble.requestDevice({
-            services: [ST3_UART_SERVICE_UUID]
-        });
+        console.log("scanAndConnect: Requesting ANY device (bypassing hidden UUID filters)...");
+        let result;
+        try {
+            result = await ble.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: [ST3_UART_SERVICE_UUID]
+            });
+        } catch (e) {
+            console.log("scanAndConnect: acceptAllDevices rejected, falling back to name prefix...");
+            result = await ble.requestDevice({
+                namePrefix: 'Navee',
+                optionalServices: [ST3_UART_SERVICE_UUID]
+            });
+        }
         
         console.log("scanAndConnect: Device request resolved: " + JSON.stringify(result));
         
@@ -165,10 +175,19 @@ const NaveeBLE = (() => {
         await initBle();
         const ble = window.Capacitor.Plugins.BluetoothLe;
         
-        // Scan for ANY device advertising the ST3 UART, but we don't care about setting up notifications
-        const result = await ble.requestDevice({
-            services: [ST3_UART_SERVICE_UUID]
-        });
+        // Scan for ANY device, bypassing hidden UUIDs in advertisement packets
+        let result;
+        try {
+            result = await ble.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: [ST3_UART_SERVICE_UUID]
+            });
+        } catch (e) {
+            result = await ble.requestDevice({
+                namePrefix: 'Navee',
+                optionalServices: [ST3_UART_SERVICE_UUID]
+            });
+        }
         
         deviceId = result.device ? result.device.deviceId : result.deviceId;
         console.log("forceBleInjection: Hooked device " + deviceId);
