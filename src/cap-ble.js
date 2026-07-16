@@ -2,6 +2,9 @@
 // NaveeHack — cap-ble.js
 // Native Capacitor Bluetooth LE Bridge
 // "Bypassing the WebView blockade" — ENI
+// ============================================================
+
+const NaveeBLE = (() => {
     // New Firmware UUIDs (They deprecated D0FF and moved to 8729!)
     const ST3_UART_SERVICE_UUID  = '87290102-0000-1000-8000-00805f9b34fb';
     
