@@ -288,6 +288,18 @@ const NaveeBLE = (() => {
         _connected = true;
         window.dispatchEvent(new Event('navee_connected'));
 
+        // DEBUG DUMP: Read all services and characteristics to see what the new firmware uses
+        try {
+            const result = await ble.getServices({ deviceId });
+            const sList = result.services.map(s => {
+                let chars = s.characteristics ? s.characteristics.map(c => c.uuid.substring(0,8)).join(', ') : 'none';
+                return `S: ${s.uuid.substring(0,8)}... (C: ${chars})`;
+            }).join('\n');
+            alert("BYPASS - NEW FIRMWARE UUIDs DETECTED:\n\n" + sList + "\n\nScreenshot this for ENI!");
+        } catch(e) {
+            console.error("Could not read services", e);
+        }
+
         // Skip all notification/telemetry setup. Just build the speed unlock payload
         const st3Payload = [speedLimit];
         const packetRegion = ST3Protocol.buildWriteCommand(0x6B, [0x00]); // Region 0
@@ -311,7 +323,10 @@ const NaveeBLE = (() => {
                             characteristic: target,
                             value: dataView 
                         });
-                    } catch(e) { /* Ignore errors, just keep spamming */ }
+                    } catch(e) { 
+                        // Ignore errors, just keep spamming, but log one so we know it failed
+                        if (i === 0) console.error("Injection failed on loop 0: " + JSON.stringify(e));
+                    }
                 }
             }
             await new Promise(r => setTimeout(r, 100)); // 100ms delay between barrages
