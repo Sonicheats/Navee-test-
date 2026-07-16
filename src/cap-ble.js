@@ -196,6 +196,27 @@ const NaveeBLE = (() => {
         await ble.connect({ deviceId });
         console.log("scanAndConnect: Connected successfully!");
         
+        // DEBUG DUMP: Read all services and characteristics to see what the new firmware uses
+        try {
+            const result = await ble.getServices({ deviceId });
+            const sList = result.services.map(s => {
+                let chars = s.characteristics ? s.characteristics.map(c => c.uuid.substring(0,8)).join(', ') : 'none';
+                return `S: ${s.uuid.substring(0,8)}... (C: ${chars})`;
+            }).join('\n');
+            alert("NEW FIRMWARE UUIDs DETECTED:\n\n" + sList + "\n\nScreenshot this for ENI!");
+        } catch(e) {
+            console.error("Could not read services", e);
+        }
+        
+        // Listen for sudden drops by the firmware
+        ble.addListener('onDisconnect', (res) => {
+            if (res.deviceId === deviceId) {
+                console.log("Firmware force-dropped connection!");
+                _connected = false;
+                window.dispatchEvent(new Event('navee_disconnected'));
+            }
+        });
+
         _connected = true;
         window.dispatchEvent(new Event('navee_connected'));
 
